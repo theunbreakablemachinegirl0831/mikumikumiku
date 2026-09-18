@@ -57,6 +57,7 @@ public fun DiagnosticsScreen(
                 VerdictCard(state.verdict)
                 RouteSelector(state.route, onSelect = viewModel::selectRoute)
                 Controls(state, onStart = onStart, viewModel = viewModel)
+                VolumeCard(state)
                 MutingExperimentCard(state)
                 MetersCard(state)
                 PlayingCard(state)
@@ -131,6 +132,11 @@ private fun Controls(
                 onChange = viewModel::setMediaMuted,
             )
             ToggleRow(
+                label = "통화 모드로 전환 (MODE_IN_COMMUNICATION)",
+                checked = state.communicationMode,
+                onChange = viewModel::setCommunicationMode,
+            )
+            ToggleRow(
                 label = "아티팩트 걸기 (+12 dB @ 1 kHz)",
                 checked = state.artifactOn,
                 enabled = state.capture is CaptureState.Running,
@@ -158,6 +164,25 @@ private fun ToggleRow(
     ) {
         Text(label, style = MaterialTheme.typography.bodyMedium)
         Switch(checked = checked, onCheckedChange = onChange, enabled = enabled)
+    }
+}
+
+@Composable
+private fun VolumeCard(state: DiagnosticsUiState) {
+    Card {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("볼륨 실측값", style = MaterialTheme.typography.titleMedium)
+            Mono("미디어 스트림", "${state.mediaVolume} / ${state.maxMediaVolume}")
+            Mono("통화 스트림", "${state.voiceVolume} / ${state.maxVoiceVolume}")
+            state.volumeProblem?.let {
+                Text(it, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+            }
+            Text(
+                "요청한 값이 아니라 기기가 실제로 들고 있는 값이다. 음소거를 켰는데 미디어가 0이 " +
+                    "아니면 볼륨 변경 자체가 거부되거나 무시된 것이고, 캡처 문제와는 다른 얘기다.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
     }
 }
 

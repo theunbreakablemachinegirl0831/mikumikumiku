@@ -36,6 +36,16 @@ public data class DiagnosticsUiState(
     val mediaMuted: Boolean = false,
     val artifactOn: Boolean = false,
     val runningMs: Long = 0,
+    /** Live read-back of the media stream, so "muted" is something seen rather than assumed. */
+    val mediaVolume: Int = 0,
+    val maxMediaVolume: Int = 0,
+    val voiceVolume: Int = 0,
+    val maxVoiceVolume: Int = 0,
+    /** Set when the device refuses per-stream volume control outright. */
+    val fixedVolumePolicy: Boolean = false,
+    /** Why the last volume change did not take, if it did not. */
+    val volumeProblem: String? = null,
+    val communicationMode: Boolean = false,
     /**
      * Result of the one experiment this build exists for: did capture keep working once the media
      * stream was muted? Null until both halves have been observed.
@@ -73,6 +83,9 @@ public class DiagnosticsViewModel(application: Application) : AndroidViewModel(a
             while (isActive) {
                 kotlinx.coroutines.delay(250)
                 refreshVerdict()
+                // The user can move the volume from the system panel at any time, so the read-back
+                // has to keep ticking rather than only update when we ask for a change.
+                refreshVolumes()
             }
         }
     }
@@ -99,11 +112,53 @@ public class DiagnosticsViewModel(application: Application) : AndroidViewModel(a
 
     /** Strategy A under test: mute the source's stream and see whether capture survives it. */
     public fun setMediaMuted(muted: Boolean) {
-        if (muted) volume.engage() else volume.restore()
-        // Each time muting is switched on the "after" half starts over, so a result from an
-        // earlier attempt cannot be mistaken for this one.
-        if (muted) sawSignalAfterMuting = false
+        if (muted) {
+            volume.engage(communicationMode = _ui.value.communicationMode)
+            // Each time muting is switched on the "after" half starts over, so a result from an
+            // earlier attempt cannot be mistaken for this one.
+            sawSignalAfterMuting = false
+        } else {
+            volume.restore()
+        }
         _ui.value = _ui.value.copy(mediaMuted = muted, mutingVerdict = null)
+        refreshVolumes()
+    }
+
+    /**
+     * Whether to also switch the device into MODE_IN_COMMUNICATION while muted.
+     *
+     * Separate from the mute toggle because it is a real trade: it can be what makes the
+     * voice-call stream actually govern our output, and it can also re-route playback somewhere
+     * the listener does not want it.
+     */
+    public fun setCommunicationMode(on: Boolean) {
+        _ui.value = _ui.value.copy(communicationMode = on)
+        if (_ui.value.mediaMuted) {
+            volume.restore()
+            volume.engage(communicationMode = on)
+            refreshVolumes()
+        }
+    }
+
+    /** Reads the actual stream volumes back, so "muted" is observed rather than assumed. */
+    private fun refreshVolumes() {
+        val media = volume.lastMediaChange
+        _ui.value = _ui.value.copy(
+            mediaVolume = volume.mediaVolume,
+            maxMediaVolume = volume.maxMediaVolume,
+            voiceVolume = volume.voiceVolume,
+            maxVoiceVolume = volume.maxVoiceVolume,
+            fixedVolumePolicy = volume.fixedVolumePolicy,
+            volumeProblem = when {
+                media?.error != null -> media.error
+                media?.silentlyIgnored == true ->
+                    "볼륨 변경이 무시되었다 (요청 ${media.requested}, 실제 ${media.actual}). " +
+                        "이 출력 경로는 Android가 볼륨을 제어하지 못한다."
+                volume.fixedVolumePolicy ->
+                    "이 기기는 스트림별 볼륨 제어를 허용하지 않는다 (고정 볼륨 정책)."
+                else -> null
+            },
+        )
     }
 
     /** A deliberately obvious artifact, to confirm processing is reaching the ears at all. */
