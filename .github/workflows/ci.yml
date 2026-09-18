@@ -1,0 +1,88 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  # The DSP and training engine are pure Kotlin/JVM on purpose, so the part of the project that
+  # carries the actual listening-test logic can be verified without an Android SDK anywhere in
+  # sight. This job is the fast signal.
+  jvm-tests:
+    name: Core tests (no Android SDK)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Run core tests
+        run: ./gradlew :core:dsp:test :core:training:test --stacktrace
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: core-test-reports
+          path: |
+            core/dsp/build/reports/tests/test
+            core/training/build/reports/tests/test
+
+  # Builds the standalone capture diagnostics APK. This is how the live-audio questions get
+  # answered: the APK has to reach a real phone, because what it measures - whether a given app
+  # allows capture, whether muting the media stream also mutes the capture, the real round-trip
+  # latency - is specific to that handset and ROM and cannot be learned from an emulator.
+  diagnostics-apk:
+    name: Diagnostics APK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build diagnostics APK
+        run: ./gradlew :tools:diagnostics:assembleDebug --stacktrace
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: capture-diagnostics-apk
+          path: tools/diagnostics/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+
+  # Compiles the trainer's own Android modules. Kept separate from the APK job so a failure here
+  # never stops the diagnostics build from producing something installable.
+  android-modules:
+    name: Android modules compile
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Assemble and unit-test library modules
+        run: ./gradlew :core:audio:assembleDebug :source:capture:assembleDebug :source:file:assembleDebug :source:capture:testDebugUnitTest --stacktrace

@@ -29,15 +29,26 @@ val androidSdkPresent =
         file("local.properties").let { it.exists() && it.readText().contains("sdk.dir") }
 
 if (androidSdkPresent) {
-    include(":core:audio")
-    include(":source:file")
-    include(":source:capture")
-    include(":app")
-
-    // Standalone measurement build. It installs alongside the trainer and depends only on the
-    // capture stack, so the live-audio questions can be settled on real hardware without waiting
-    // for the rest of the app to be finished.
-    include(":tools:diagnostics")
+    // Only modules that actually exist on disk: the trainer's UI module is still being built, and
+    // listing it before it is there would fail configuration for everything else - including the
+    // diagnostics APK, which is the one artifact that has to keep building.
+    listOf(
+        ":core:audio",
+        ":source:file",
+        ":source:capture",
+        ":app",
+        // Standalone measurement build. It installs alongside the trainer and depends only on the
+        // capture stack, so the live-audio questions can be settled on real hardware without
+        // waiting for the rest of the app to be finished.
+        ":tools:diagnostics",
+    ).forEach { path ->
+        val directory = file(path.removePrefix(":").replace(':', '/'))
+        if (directory.resolve("build.gradle.kts").exists()) {
+            include(path)
+        } else {
+            logger.lifecycle("[mikumikumiku] Skipping $path - not present yet.")
+        }
+    }
 } else {
     logger.lifecycle(
         "[mikumikumiku] No Android SDK found - configuring pure-JVM modules only " +
