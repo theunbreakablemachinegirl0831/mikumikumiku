@@ -48,7 +48,6 @@ public class AudioOutput(
             AudioAttributes.Builder()
                 .setUsage(route.usage())
                 .setContentType(route.contentType())
-                .setFlags(AudioAttributes.FLAG_LOW_LATENCY)
                 .build()
         )
         .setAudioFormat(

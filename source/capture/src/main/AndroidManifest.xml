@@ -18,7 +18,7 @@
           projection manager.
         -->
         <service
-            android:name=".SystemAudioCaptureService"
+            android:name="mmm.source.capture.SystemAudioCaptureService"
             android:exported="false"
             android:foregroundServiceType="mediaProjection" />
     </application>

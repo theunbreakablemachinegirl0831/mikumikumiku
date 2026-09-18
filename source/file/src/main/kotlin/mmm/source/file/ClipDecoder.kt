@@ -112,7 +112,8 @@ public object ClipDecoder {
         val info = MediaCodec.BufferInfo()
         var inputDone = false
         var outputDone = false
-        var pcmEncoding = MediaFormat.ENCODING_PCM_16BIT
+        // The encoding constants live on AudioFormat; MediaFormat only carries the key for them.
+        var pcmEncoding = android.media.AudioFormat.ENCODING_PCM_16BIT
         var decodedChannels = sourceChannels
 
         while (!outputDone && written < targetFrames) {
