@@ -26,7 +26,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import mmm.audio.AudioOutput
 import mmm.audio.OutputRoute
 import mmm.audio.PlaybackEngine
-import mmm.audio.RingBufferSource
+import mmm.dsp.stream.RingBufferSource
 import mmm.dsp.AudioBuffer
 import mmm.dsp.AudioProcessor
 import kotlin.concurrent.thread

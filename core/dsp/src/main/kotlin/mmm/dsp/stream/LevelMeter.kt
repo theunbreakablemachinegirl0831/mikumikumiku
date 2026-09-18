@@ -1,4 +1,4 @@
-package mmm.audio
+package mmm.dsp.stream
 
 import mmm.dsp.AudioBuffer
 import kotlin.math.abs
