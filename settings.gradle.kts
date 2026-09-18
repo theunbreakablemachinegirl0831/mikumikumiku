@@ -33,6 +33,11 @@ if (androidSdkPresent) {
     include(":source:file")
     include(":source:capture")
     include(":app")
+
+    // Standalone measurement build. It installs alongside the trainer and depends only on the
+    // capture stack, so the live-audio questions can be settled on real hardware without waiting
+    // for the rest of the app to be finished.
+    include(":tools:diagnostics")
 } else {
     logger.lifecycle(
         "[mikumikumiku] No Android SDK found - configuring pure-JVM modules only " +

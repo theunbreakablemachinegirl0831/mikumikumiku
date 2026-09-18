@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      Compose draws everything, so this only has to hand over a bare window. Material3's XML
+      themes ship with the Views library, which this app does not otherwise need.
+    -->
+    <style name="Theme.MmmDiagnostics" parent="android:Theme.DeviceDefault.DayNight.NoActionBar">
+        <item name="android:windowBackground">?android:attr/colorBackground</item>
+    </style>
+</resources>
