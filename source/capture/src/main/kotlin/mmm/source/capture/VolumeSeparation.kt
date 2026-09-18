@@ -21,8 +21,14 @@ public data class VolumeChange(
 }
 
 /**
- * Strategy A for keeping the source app out of the listener's ears: play the processed signal on
- * the voice-call stream, then turn the media stream down to zero.
+ * Strategy A for keeping the source app out of the listener's ears: play the processed signal on a
+ * stream of our own, then turn the media stream down to zero.
+ *
+ * Which stream matters more than it looks. Over Bluetooth the voice-call stream leaves A2DP for
+ * HFP/SCO - narrowband mono, useless for a listening test and often silent unless SCO was started
+ * explicitly - which is exactly how the first on-device run failed. The alarm and system streams
+ * stay on A2DP, carry full quality over LDAC, and have their own volume slider, so they are the
+ * routes that actually separate on a Bluetooth DAC.
  *
  * Two separate things can defeat this, and telling them apart is the whole job:
  *
@@ -46,10 +52,6 @@ public class VolumeSeparation(context: Context) {
 
     public val maxMediaVolume: Int get() = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
 
-    public val voiceVolume: Int get() = audioManager.getStreamVolume(AudioManager.STREAM_VOICE_CALL)
-
-    public val maxVoiceVolume: Int get() = audioManager.getStreamMaxVolume(AudioManager.STREAM_VOICE_CALL)
-
     /** True when the device refuses per-stream volume control entirely, which rules out strategy A. */
     public val fixedVolumePolicy: Boolean get() = audioManager.isVolumeFixed
 
@@ -57,37 +59,54 @@ public class VolumeSeparation(context: Context) {
     public var lastMediaChange: VolumeChange? = null
         private set
 
-    public var lastVoiceChange: VolumeChange? = null
+    /** The most recent attempt on whichever stream our own output plays on. */
+    public var lastOutputChange: VolumeChange? = null
         private set
 
     /**
-     * Silences the source app's output and brings the voice-call stream up to a working level.
+     * Silences the source app's output and brings [route]'s own stream up to a working level.
      *
-     * @param communicationMode also switches the device into `MODE_IN_COMMUNICATION`. A
-     *   `USAGE_VOICE_COMMUNICATION` track is not reliably governed by the voice-call stream
-     *   otherwise - but the mode also changes routing (it can prefer the earpiece), so it is a
-     *   separate switch the diagnostics screen can toggle rather than an assumption.
+     * @param route must be one that plays on a stream other than media, or muting media would
+     *   take our output with it.
+     * @param communicationMode also switches the device into `MODE_IN_COMMUNICATION`. Only the
+     *   voice-call route needs it, and the mode can re-route playback (it may prefer the earpiece),
+     *   so it is a switch the diagnostics screen offers rather than an assumption baked in.
      * @return true when the media stream really did reach zero.
      */
     public fun engage(
-        voiceVolumeFraction: Double = 0.7,
+        route: OutputRoute,
+        outputVolumeFraction: Double = 0.7,
         communicationMode: Boolean = false,
     ): Boolean {
+        require(route.separatesByStream) {
+            "$route shares the media stream, so muting it would silence our own output too"
+        }
         if (savedMediaVolume == null) savedMediaVolume = mediaVolume
 
-        if (communicationMode && savedMode == null) {
+        // Only the voice-call route needs the mode change, and it is the route that costs the most
+        // when the mode re-routes playback, so it is never applied to the others.
+        if (communicationMode && route == OutputRoute.VOICE_CALL && savedMode == null) {
             savedMode = audioManager.mode
             runCatching { audioManager.mode = AudioManager.MODE_IN_COMMUNICATION }
         }
 
-        lastVoiceChange = setStream(
-            AudioManager.STREAM_VOICE_CALL,
-            (maxVoiceVolume * voiceVolumeFraction).toInt().coerceIn(1, maxVoiceVolume),
+        val stream = route.volumeStream()
+        val max = audioManager.getStreamMaxVolume(stream)
+        lastOutputChange = setStream(
+            stream,
+            (max * outputVolumeFraction).toInt().coerceIn(1, max),
         )
         val media = setStream(AudioManager.STREAM_MUSIC, 0)
         lastMediaChange = media
         return media.applied
     }
+
+    /** Current volume of whichever stream [route] plays on. */
+    public fun outputVolume(route: OutputRoute): Int =
+        audioManager.getStreamVolume(route.volumeStream())
+
+    public fun maxOutputVolume(route: OutputRoute): Int =
+        audioManager.getStreamMaxVolume(route.volumeStream())
 
     public fun restore() {
         savedMediaVolume?.let { lastMediaChange = setStream(AudioManager.STREAM_MUSIC, it) }

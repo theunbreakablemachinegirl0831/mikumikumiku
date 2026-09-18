@@ -173,7 +173,7 @@ private fun VolumeCard(state: DiagnosticsUiState) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("볼륨 실측값", style = MaterialTheme.typography.titleMedium)
             Mono("미디어 스트림", "${state.mediaVolume} / ${state.maxMediaVolume}")
-            Mono("통화 스트림", "${state.voiceVolume} / ${state.maxVoiceVolume}")
+            Mono("처리음 스트림 (${state.route.displayName})", "${state.outputVolume} / ${state.maxOutputVolume}")
             state.volumeProblem?.let {
                 Text(it, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
             }

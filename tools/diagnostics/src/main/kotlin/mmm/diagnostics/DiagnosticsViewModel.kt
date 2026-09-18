@@ -32,15 +32,16 @@ public data class DiagnosticsUiState(
         "캡처를 시작하면 신호가 들어오는지 확인한다.",
     ),
     val playing: List<PlayingStream> = emptyList(),
-    val route: OutputRoute = OutputRoute.MEDIA,
+    /** Defaults to the route that separates on Bluetooth, since that is the common listening rig. */
+    val route: OutputRoute = OutputRoute.ALARM,
     val mediaMuted: Boolean = false,
     val artifactOn: Boolean = false,
     val runningMs: Long = 0,
     /** Live read-back of the media stream, so "muted" is something seen rather than assumed. */
     val mediaVolume: Int = 0,
     val maxMediaVolume: Int = 0,
-    val voiceVolume: Int = 0,
-    val maxVoiceVolume: Int = 0,
+    val outputVolume: Int = 0,
+    val maxOutputVolume: Int = 0,
     /** Set when the device refuses per-stream volume control outright. */
     val fixedVolumePolicy: Boolean = false,
     /** Why the last volume change did not take, if it did not. */
@@ -107,13 +108,29 @@ public class DiagnosticsViewModel(application: Application) : AndroidViewModel(a
 
     public fun selectRoute(route: OutputRoute) {
         if (!route.implemented) return
-        _ui.value = _ui.value.copy(route = route)
+        // Switching route while muted would leave the old stream turned up and the new one down,
+        // so the mute is lifted and has to be re-applied deliberately.
+        if (_ui.value.mediaMuted) volume.restore()
+        _ui.value = _ui.value.copy(route = route, mediaMuted = false, mutingVerdict = null)
+        refreshVolumes()
     }
 
     /** Strategy A under test: mute the source's stream and see whether capture survives it. */
     public fun setMediaMuted(muted: Boolean) {
+        val route = _ui.value.route
+        if (muted && !route.separatesByStream) {
+            // Muting the media stream on a route that shares it would silence our own output too,
+            // so say that rather than doing it and leaving the user to work out why it went quiet.
+            _ui.value = _ui.value.copy(
+                volumeProblem = "'${route.displayName}' 경로는 처리음도 미디어 스트림으로 " +
+                    "나가므로 미디어를 0으로 내리면 우리 소리까지 같이 사라진다. " +
+                    "알람 또는 시스템 스트림 경로를 고른 뒤 다시 시도한다.",
+            )
+            return
+        }
+
         if (muted) {
-            volume.engage(communicationMode = _ui.value.communicationMode)
+            volume.engage(route = route, communicationMode = _ui.value.communicationMode)
             // Each time muting is switched on the "after" half starts over, so a result from an
             // earlier attempt cannot be mistaken for this one.
             sawSignalAfterMuting = false
@@ -133,9 +150,10 @@ public class DiagnosticsViewModel(application: Application) : AndroidViewModel(a
      */
     public fun setCommunicationMode(on: Boolean) {
         _ui.value = _ui.value.copy(communicationMode = on)
-        if (_ui.value.mediaMuted) {
+        val route = _ui.value.route
+        if (_ui.value.mediaMuted && route.separatesByStream) {
             volume.restore()
-            volume.engage(communicationMode = on)
+            volume.engage(route = route, communicationMode = on)
             refreshVolumes()
         }
     }
@@ -146,8 +164,8 @@ public class DiagnosticsViewModel(application: Application) : AndroidViewModel(a
         _ui.value = _ui.value.copy(
             mediaVolume = volume.mediaVolume,
             maxMediaVolume = volume.maxMediaVolume,
-            voiceVolume = volume.voiceVolume,
-            maxVoiceVolume = volume.maxVoiceVolume,
+            outputVolume = volume.outputVolume(_ui.value.route),
+            maxOutputVolume = volume.maxOutputVolume(_ui.value.route),
             fixedVolumePolicy = volume.fixedVolumePolicy,
             volumeProblem = when {
                 media?.error != null -> media.error
