@@ -21,6 +21,10 @@ rootProject.name = "mikumikumiku"
 include(":core:dsp")
 include(":core:training")
 
+// USB Audio Class descriptor parsing. Pure byte-twiddling over a raw descriptor blob, so it is
+// unit-tested here rather than discovered to be wrong on a phone with a DAC attached.
+include(":core:usb")
+
 // The Android side is only configured when an SDK is actually present, so that
 // `gradle :core:dsp:test` works in a bare JDK container.
 val androidSdkPresent =
@@ -36,6 +40,7 @@ if (androidSdkPresent) {
         ":core:audio",
         ":source:file",
         ":source:capture",
+        ":source:usb",
         ":app",
         // Standalone measurement build. It installs alongside the trainer and depends only on the
         // capture stack, so the live-audio questions can be settled on real hardware without

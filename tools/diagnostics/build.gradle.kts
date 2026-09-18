@@ -37,6 +37,7 @@ android {
 
 dependencies {
     implementation(project(":source:capture"))
+    implementation(project(":source:usb"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)

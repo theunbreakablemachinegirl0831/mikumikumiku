@@ -21,6 +21,8 @@ import mmm.source.capture.CaptureVerdict
 import mmm.source.capture.PlayingAppsMonitor
 import mmm.source.capture.PlayingStream
 import mmm.source.capture.VolumeSeparation
+import mmm.source.usb.UsbAudioController
+import mmm.source.usb.UsbAudioReport
 
 /** Everything the one diagnostics screen shows. */
 public data class DiagnosticsUiState(
@@ -47,6 +49,7 @@ public data class DiagnosticsUiState(
     /** Why the last volume change did not take, if it did not. */
     val volumeProblem: String? = null,
     val communicationMode: Boolean = false,
+    val usb: UsbAudioReport = UsbAudioReport(),
     /**
      * Result of the one experiment this build exists for: did capture keep working once the media
      * stream was muted? Null until both halves have been observed.
@@ -66,6 +69,7 @@ public class DiagnosticsViewModel(application: Application) : AndroidViewModel(a
     private val controller = CaptureController(application, viewModelScope)
     private val playingMonitor = PlayingAppsMonitor(application)
     private val volume = VolumeSeparation(application)
+    private val usb = UsbAudioController(application)
 
     private val _ui = MutableStateFlow(DiagnosticsUiState())
     public val ui: StateFlow<DiagnosticsUiState> = _ui.asStateFlow()
@@ -75,6 +79,8 @@ public class DiagnosticsViewModel(application: Application) : AndroidViewModel(a
 
     init {
         playingMonitor.start()
+        usb.start()
+        viewModelScope.launch { usb.report.collect { _ui.value = _ui.value.copy(usb = it) } }
         viewModelScope.launch { controller.state.collect { onState(it) } }
         viewModelScope.launch { controller.telemetry.collect { onTelemetry(it) } }
         viewModelScope.launch { playingMonitor.streams.collect { streams -> _ui.value = _ui.value.copy(playing = streams) } }
@@ -224,7 +230,31 @@ public class DiagnosticsViewModel(application: Application) : AndroidViewModel(a
         )
     }
 
+    /** Asks for USB access, which the system shows as its own dialog. */
+    public fun requestUsbPermission() {
+        usb.requestPermission()
+    }
+
+    /**
+     * The exclusive-claim experiment: take the DAC and see whether Android gives it up.
+     *
+     * A successful claim is not yet sound - isochronous transfers are still to come - but it is
+     * the answer that decides whether writing that streamer is worth it at all.
+     */
+    public fun claimUsbExclusively() {
+        usb.claimExclusively()
+    }
+
+    public fun releaseUsbClaim() {
+        usb.releaseClaim()
+    }
+
+    public fun refreshUsb() {
+        usb.refresh()
+    }
+
     override fun onCleared() {
+        usb.stop()
         playingMonitor.stop()
         controller.stop()
         volume.restore()

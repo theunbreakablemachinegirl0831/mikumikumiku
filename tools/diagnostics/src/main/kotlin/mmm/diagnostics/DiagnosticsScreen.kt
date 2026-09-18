@@ -55,6 +55,7 @@ public fun DiagnosticsScreen(
                 )
 
                 VerdictCard(state.verdict)
+                UsbCard(state, viewModel)
                 RouteSelector(state.route, onSelect = viewModel::selectRoute)
                 Controls(state, onStart = onStart, viewModel = viewModel)
                 VolumeCard(state)
@@ -79,6 +80,105 @@ private fun VerdictCard(verdict: CaptureVerdict) {
             Text(verdict.headline, style = MaterialTheme.typography.titleMedium)
             Text(verdict.detail, style = MaterialTheme.typography.bodyMedium)
             verdict.suggestions.forEach { Text("· $it", style = MaterialTheme.typography.bodySmall) }
+        }
+    }
+}
+
+/**
+ * The USB DAC experiment: can we take the device away from Android?
+ *
+ * This is the question that decides whether writing a native isochronous streamer is worth it, so
+ * it is reported in full - what the descriptors say, what the claim returned, and above all
+ * whether Android's own USB output disappeared afterwards. A claim that succeeds while the
+ * platform keeps its route means both of us are feeding the DAC, which solves nothing.
+ */
+@Composable
+private fun UsbCard(state: DiagnosticsUiState, viewModel: DiagnosticsViewModel) {
+    val usb = state.usb
+    Card {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("USB DAC 배타 점유", style = MaterialTheme.typography.titleMedium)
+
+            if (usb.candidates.isEmpty()) {
+                Text(
+                    usb.message ?: "연결된 USB 오디오 장치가 없다. DAC을 USB로 연결한다.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            } else {
+                usb.candidates.forEach { candidate ->
+                    val isSelected = candidate.deviceName == usb.selected?.deviceName
+                    Text(
+                        "${if (isSelected) "▶ " else "  "}${candidate.label} (${candidate.identity})",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                    )
+                }
+            }
+
+            usb.selected?.let { candidate ->
+                Mono("USB 오디오 규격", candidate.function.spec.label)
+                Mono("스트리밍 인터페이스", candidate.function.streamingInterfaceNumbers.joinToString())
+                val rates = candidate.function.advertisedRates
+                Mono(
+                    "지원 샘플레이트",
+                    if (rates.isEmpty()) "클럭 소스에서 조회 필요 (UAC 2.0)"
+                    else rates.joinToString(" / ") { "${it / 1000}k" },
+                )
+                candidate.function.outputAlternates.forEach {
+                    Text("· ${it.describe}", style = MaterialTheme.typography.bodySmall)
+                }
+            }
+
+            usb.chosenAlternate?.let {
+                Mono("선택된 설정", it.describe)
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = viewModel::requestUsbPermission,
+                    enabled = usb.candidates.isNotEmpty() || !usb.permissionGranted,
+                ) { Text("USB 권한") }
+                Button(
+                    onClick = viewModel::claimUsbExclusively,
+                    enabled = usb.selected != null && !usb.holdingExclusively,
+                ) { Text("배타 점유") }
+                OutlinedButton(
+                    onClick = viewModel::releaseUsbClaim,
+                    enabled = usb.claim != null,
+                ) { Text("해제") }
+            }
+
+            usb.claim?.let { claim ->
+                Text(
+                    when {
+                        claim.exclusive -> "성립: Android가 USB 출력을 놓았다. 이제 DAC은 우리 것이다."
+                        claim.claimed -> "부분 성공: 인터페이스는 잡았지만 Android가 아직 USB 출력을 들고 있다."
+                        else -> "실패: 인터페이스를 점유하지 못했다."
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(claim.detail, style = MaterialTheme.typography.bodySmall)
+            }
+
+            if (usb.androidOutputsBefore.isNotEmpty()) {
+                Text("점유 전 Android 출력:", style = MaterialTheme.typography.bodySmall)
+                usb.androidOutputsBefore.forEach {
+                    Text("  · $it", style = MaterialTheme.typography.bodySmall)
+                }
+            }
+            if (usb.androidOutputsAfter.isNotEmpty()) {
+                Text("점유 후 Android 출력:", style = MaterialTheme.typography.bodySmall)
+                usb.androidOutputsAfter.forEach {
+                    Text("  · $it", style = MaterialTheme.typography.bodySmall)
+                }
+            }
+
+            Text(
+                "아직 소리는 나지 않는다. isochronous 전송은 Java USB API에 없어서 네이티브가 " +
+                    "필요하고, 그건 Android가 장치를 놓아준다는 게 확인된 다음에 쓸 값어치가 있다.",
+                style = MaterialTheme.typography.bodySmall,
+            )
         }
     }
 }
