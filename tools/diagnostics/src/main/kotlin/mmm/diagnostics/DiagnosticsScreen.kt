@@ -50,20 +50,56 @@ public fun DiagnosticsScreen(
             ) {
                 Text("실시간 캡처 진단", style = MaterialTheme.typography.headlineSmall)
                 Text(
-                    "다른 앱 오디오가 실제로 잡히는지, 원음을 죽일 수 있는지, 지연이 얼마인지 측정한다.",
-                    style = MaterialTheme.typography.bodyMedium,
+                    "v${BuildConfig.VERSION_NAME} · 빌드 ${BuildConfig.BUILD_ID}",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontFamily = FontFamily.Monospace,
                 )
 
-                VerdictCard(state.verdict)
+                SectionHeader("1. USB DAC 배타 점유", "확인 필요" to false)
                 UsbCard(state, viewModel)
-                RouteSelector(state.route, onSelect = viewModel::selectRoute)
+
+                SectionHeader("2. 캡처와 처리 경로", "확인 필요" to false)
+                VerdictCard(state.verdict)
                 Controls(state, onStart = onStart, viewModel = viewModel)
-                VolumeCard(state)
-                MutingExperimentCard(state)
                 MetersCard(state)
                 PlayingCard(state)
+
+                SectionHeader("3. 볼륨 분리 (블루투스 폴백)", "USB에선 불필요" to true)
+                Text(
+                    "USB DAC을 배타 점유하면 원음은 폰 스피커로 밀려나므로 이 절은 쓰이지 않는다. " +
+                        "USB가 없는 블루투스 청취용 대비책으로만 남겨둔다.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                RouteSelector(state.route, onSelect = viewModel::selectRoute)
+                VolumeCard(state)
+                MutingExperimentCard(state)
             }
         }
+    }
+}
+
+/**
+ * Marks which sections still need running.
+ *
+ * The app has accumulated experiments that later findings made redundant, and leaving them looking
+ * equally important wastes the one resource this project is short of: rounds of somebody sitting
+ * with a phone and a DAC.
+ */
+@Composable
+private fun SectionHeader(title: String, status: Pair<String, Boolean>) {
+    val (label, settled) = status
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(title, style = MaterialTheme.typography.titleMedium)
+        Text(
+            label,
+            style = MaterialTheme.typography.labelMedium,
+            color = if (settled) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.primary,
+            fontWeight = if (settled) FontWeight.Normal else FontWeight.Bold,
+        )
     }
 }
 
@@ -165,6 +201,19 @@ private fun UsbCard(state: DiagnosticsUiState, viewModel: DiagnosticsViewModel) 
                         "장치 목록에 USB가 남아있는 것은 정상이다 - 케이블이 꽂혀 있으니 Android는 " +
                             "계속 알고 있다. 판정은 위의 '실제 재생 경로'로 한다.",
                         style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                if (claim.claimed && claim.routedToUsb) {
+                    // Claiming evicts the kernel driver from the interface, but it does not stop
+                    // the platform's audio policy from having already opened the card and going on
+                    // using it. Android exposes a switch for exactly this, and it is the step
+                    // UAPP's own setup asks for on devices that behave this way.
+                    Text(
+                        "인터페이스는 잡혔는데 Android가 계속 USB로 재생한다면, 개발자 옵션의 " +
+                            "'USB 오디오 라우팅 비활성화'를 켜야 한다. 커널 드라이버를 떼어내도 " +
+                            "플랫폼의 오디오 정책이 이미 열어둔 카드를 계속 쓰는 경우가 있다.",
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Bold,
                     )
                 }
             }

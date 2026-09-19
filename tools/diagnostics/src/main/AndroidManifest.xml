@@ -3,14 +3,14 @@
 
     <application
         android:allowBackup="false"
-        android:label="청음 캡처 진단"
+        android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.MmmDiagnostics">
 
         <activity
             android:name=".DiagnosticsActivity"
             android:exported="true"
-            android:label="청음 캡처 진단">
+            android:label="@string/app_name">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
