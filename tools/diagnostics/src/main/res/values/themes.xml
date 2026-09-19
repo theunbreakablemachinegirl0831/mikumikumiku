@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      Compose draws everything, so this only has to hand over a bare window. Material3's XML themes
+      ship with the Views library, which this app does not otherwise need.
+
+      Day and night are two separate parents rather than one DayNight parent: the platform has no
+      Theme.DeviceDefault.DayNight.NoActionBar, so pairing the light and dark NoActionBar variants
+      through a -night qualifier is the combination that actually resolves.
+    -->
+    <style name="Theme.MmmDiagnostics" parent="@android:style/Theme.DeviceDefault.Light.NoActionBar">
+        <item name="android:windowBackground">?android:attr/colorBackground</item>
+    </style>
+</resources>
