@@ -151,14 +151,22 @@ private fun UsbCard(state: DiagnosticsUiState, viewModel: DiagnosticsViewModel) 
             usb.claim?.let { claim ->
                 Text(
                     when {
-                        claim.exclusive -> "성립: Android가 USB 출력을 놓았다. 이제 DAC은 우리 것이다."
-                        claim.claimed -> "부분 성공: 인터페이스는 잡았지만 Android가 아직 USB 출력을 들고 있다."
+                        claim.exclusive -> "성립: Android 재생이 USB를 떠났다. 이제 DAC은 우리 것이다."
+                        claim.claimed -> "부분 성공: 인터페이스는 잡았지만 Android가 아직 USB로 재생한다."
                         else -> "실패: 인터페이스를 점유하지 못했다."
                     },
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Bold,
                 )
                 Text(claim.detail, style = MaterialTheme.typography.bodySmall)
+                Mono("실제 재생 경로", claim.routedOutputLabel ?: "확인 불가")
+                if (claim.androidStillListsUsbOutput) {
+                    Text(
+                        "장치 목록에 USB가 남아있는 것은 정상이다 - 케이블이 꽂혀 있으니 Android는 " +
+                            "계속 알고 있다. 판정은 위의 '실제 재생 경로'로 한다.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
             }
 
             if (usb.androidOutputsBefore.isNotEmpty()) {

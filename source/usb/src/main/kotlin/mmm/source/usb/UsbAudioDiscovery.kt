@@ -65,32 +65,86 @@ public class UsbAudioDiscovery(context: Context) {
         attachedAudioDevices().mapNotNull(::inspect).filter { !it.function.isEmpty }
 
     /**
-     * Whether Android currently has a USB audio output of its own.
+     * Whether Android still *lists* a USB audio output.
      *
-     * This is the observable that says whether an exclusive claim worked: while the platform's
-     * driver holds the DAC it appears here, and once the driver has been detached it does not.
+     * This is a weaker signal than it looks, and taking it for the answer was a mistake: the list
+     * enumerates what the platform knows is attached, not where audio is going. A claimed DAC
+     * stays on it simply because it is still plugged in. Use [probeRoutedOutput] to find out what
+     * is actually being played to.
      */
-    public fun androidSeesUsbOutput(): Boolean =
-        audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS).any {
-            it.type == AudioDeviceInfo.TYPE_USB_HEADSET ||
-                it.type == AudioDeviceInfo.TYPE_USB_DEVICE ||
-                it.type == AudioDeviceInfo.TYPE_USB_ACCESSORY
+    public fun androidListsUsbOutput(): Boolean =
+        audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS).any { it.isUsb }
+
+    /**
+     * Where audio would actually go right now.
+     *
+     * Opens a momentary silent track and asks what it got routed to. This is the observable that
+     * settles an exclusive claim: once the platform has lost the DAC it routes to the built-in
+     * speaker instead, whatever its device list still says.
+     */
+    public fun probeRoutedOutput(): AudioDeviceInfo? {
+        val format = android.media.AudioFormat.Builder()
+            .setEncoding(android.media.AudioFormat.ENCODING_PCM_16BIT)
+            .setSampleRate(48000)
+            .setChannelMask(android.media.AudioFormat.CHANNEL_OUT_STEREO)
+            .build()
+        val minBytes = android.media.AudioTrack
+            .getMinBufferSize(48000, android.media.AudioFormat.CHANNEL_OUT_STEREO, android.media.AudioFormat.ENCODING_PCM_16BIT)
+            .coerceAtLeast(1024)
+
+        val track = runCatching {
+            android.media.AudioTrack.Builder()
+                .setAudioAttributes(
+                    android.media.AudioAttributes.Builder()
+                        .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
+                        .setContentType(android.media.AudioAttributes.CONTENT_TYPE_MUSIC)
+                        .build()
+                )
+                .setAudioFormat(format)
+                .setBufferSizeInBytes(minBytes)
+                .build()
+        }.getOrNull() ?: return null
+
+        return try {
+            // Routing is only resolved once the track is actually running, so it gets a buffer of
+            // silence rather than just being started and asked.
+            track.play()
+            track.write(ShortArray(minBytes / 2), 0, minBytes / 2)
+            track.routedDevice
+        } catch (e: Exception) {
+            null
+        } finally {
+            runCatching { track.stop() }
+            track.release()
         }
+    }
+
+    /** Human-readable form of [probeRoutedOutput], for the diagnostics readout. */
+    public fun probeRoutedOutputLabel(): String? =
+        probeRoutedOutput()?.let { "${describeType(it.type)}: ${it.productName}" }
+
+    /** True when audio is currently being routed to a USB device. */
+    public fun audioActuallyRoutedToUsb(): Boolean = probeRoutedOutput()?.isUsb == true
+
+    private val AudioDeviceInfo.isUsb: Boolean
+        get() = type == AudioDeviceInfo.TYPE_USB_HEADSET ||
+            type == AudioDeviceInfo.TYPE_USB_DEVICE ||
+            type == AudioDeviceInfo.TYPE_USB_ACCESSORY
 
     /** Names of the outputs Android is currently willing to use, for the diagnostics readout. */
     public fun androidOutputs(): List<String> =
-        audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS).map { device ->
-            val kind = when (device.type) {
-                AudioDeviceInfo.TYPE_USB_HEADSET -> "USB 헤드셋"
-                AudioDeviceInfo.TYPE_USB_DEVICE -> "USB 장치"
-                AudioDeviceInfo.TYPE_USB_ACCESSORY -> "USB 액세서리"
-                AudioDeviceInfo.TYPE_BLUETOOTH_A2DP -> "블루투스"
-                AudioDeviceInfo.TYPE_BUILTIN_SPEAKER -> "내장 스피커"
-                AudioDeviceInfo.TYPE_WIRED_HEADPHONES, AudioDeviceInfo.TYPE_WIRED_HEADSET -> "유선"
-                else -> "기타(${device.type})"
-            }
-            "$kind: ${device.productName}"
-        }
+        audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
+            .map { "${describeType(it.type)}: ${it.productName}" }
+
+    private fun describeType(type: Int): String = when (type) {
+        AudioDeviceInfo.TYPE_USB_HEADSET -> "USB 헤드셋"
+        AudioDeviceInfo.TYPE_USB_DEVICE -> "USB 장치"
+        AudioDeviceInfo.TYPE_USB_ACCESSORY -> "USB 액세서리"
+        AudioDeviceInfo.TYPE_BLUETOOTH_A2DP -> "블루투스"
+        AudioDeviceInfo.TYPE_BUILTIN_SPEAKER -> "내장 스피커"
+        AudioDeviceInfo.TYPE_WIRED_HEADPHONES, AudioDeviceInfo.TYPE_WIRED_HEADSET -> "유선"
+        else -> "기타($type)"
+    }
 
     public companion object {
         private const val USB_CLASS_AUDIO = 1

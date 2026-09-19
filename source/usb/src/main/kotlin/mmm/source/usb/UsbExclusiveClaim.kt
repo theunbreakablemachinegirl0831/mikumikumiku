@@ -10,16 +10,22 @@ import mmm.usb.UsbAudioFunction
 /** Outcome of trying to take a DAC away from the platform. */
 public data class ClaimResult(
     val claimed: Boolean,
-    /** Whether Android still lists a USB audio output after the attempt. */
-    val androidStillHasUsbOutput: Boolean,
+    /**
+     * Whether Android still *lists* a USB audio output. Weak evidence on its own: a claimed DAC
+     * stays on that list because it is still plugged in.
+     */
+    val androidStillListsUsbOutput: Boolean,
+    /** Where a fresh track actually got routed after the claim, which is the evidence that counts. */
+    val routedOutputLabel: String?,
+    val routedToUsb: Boolean,
     val detail: String,
 ) {
     /**
-     * The claim only counts as exclusive if the platform actually let go. A claim that succeeds
-     * while Android keeps its own route means both of us are feeding the DAC, which is the
-     * doubling problem all over again.
+     * Exclusive means the platform stopped playing to the DAC, and the only way to know that is to
+     * ask where audio actually goes. The device list keeps the DAC either way, so an earlier
+     * version of this check called a working claim a partial failure.
      */
-    public val exclusive: Boolean get() = claimed && !androidStillHasUsbOutput
+    public val exclusive: Boolean get() = claimed && !routedToUsb
 }
 
 /**
@@ -58,12 +64,9 @@ public class UsbExclusiveClaim(
      */
     public fun claim(device: UsbDevice, function: UsbAudioFunction): ClaimResult {
         if (isHolding) release()
-        if (!usbManager.hasPermission(device)) {
-            return ClaimResult(false, discovery.androidSeesUsbOutput(), "USB 접근 권한이 없다")
-        }
+        if (!usbManager.hasPermission(device)) return failure("USB 접근 권한이 없다")
 
-        val opened = usbManager.openDevice(device)
-            ?: return ClaimResult(false, discovery.androidSeesUsbOutput(), "장치를 열 수 없다")
+        val opened = usbManager.openDevice(device) ?: return failure("장치를 열 수 없다")
 
         val wanted = buildList {
             function.controlInterfaceNumber?.let(::add)
@@ -84,11 +87,7 @@ public class UsbExclusiveClaim(
 
         if (taken.isEmpty()) {
             opened.close()
-            return ClaimResult(
-                claimed = false,
-                androidStillHasUsbOutput = discovery.androidSeesUsbOutput(),
-                detail = "인터페이스를 하나도 점유하지 못했다 (${wanted.joinToString()})",
-            )
+            return failure("인터페이스를 하나도 점유하지 못했다 (${wanted.joinToString()})")
         }
 
         connection = opened
@@ -96,15 +95,38 @@ public class UsbExclusiveClaim(
         parkedDevice = device
         parkOnRelease = function.zeroBandwidthAlternates
 
-        val stillThere = discovery.androidSeesUsbOutput()
+        val routed = discovery.probeRoutedOutput()
+        val routedToUsb = routed?.let {
+            it.type == android.media.AudioDeviceInfo.TYPE_USB_HEADSET ||
+                it.type == android.media.AudioDeviceInfo.TYPE_USB_DEVICE ||
+                it.type == android.media.AudioDeviceInfo.TYPE_USB_ACCESSORY
+        } ?: false
+
         return ClaimResult(
             claimed = true,
-            androidStillHasUsbOutput = stillThere,
+            androidStillListsUsbOutput = discovery.androidListsUsbOutput(),
+            routedOutputLabel = routed?.let { "${it.productName}" },
+            routedToUsb = routedToUsb,
             detail = buildString {
                 append("인터페이스 ").append(taken.joinToString()).append(" 점유")
                 if (failed.isNotEmpty()) append(" · 실패: ").append(failed.joinToString())
-                append(if (stillThere) " · Android가 아직 USB 출력을 들고 있다" else " · Android가 USB 출력을 놓았다")
+                append(
+                    if (routedToUsb) " · Android가 아직 USB로 재생한다"
+                    else " · Android 재생이 USB를 떠났다"
+                )
             },
+        )
+    }
+
+    /** A failed claim still reports where audio is going, so the readout stays comparable. */
+    private fun failure(detail: String): ClaimResult {
+        val routed = discovery.probeRoutedOutput()
+        return ClaimResult(
+            claimed = false,
+            androidStillListsUsbOutput = discovery.androidListsUsbOutput(),
+            routedOutputLabel = routed?.productName?.toString(),
+            routedToUsb = discovery.audioActuallyRoutedToUsb(),
+            detail = detail,
         )
     }
 
