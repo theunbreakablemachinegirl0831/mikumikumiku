@@ -24,7 +24,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
 
       - name: Run core tests
-        run: ./gradlew :core:dsp:test :core:training:test --stacktrace
+        run: ./gradlew :core:dsp:test :core:training:test :core:usb:test --stacktrace
 
       - name: Upload test reports
         if: always()
@@ -34,6 +34,43 @@ jobs:
           path: |
             core/dsp/build/reports/tests/test
             core/training/build/reports/tests/test
+            core/usb/build/reports/tests/test
+
+  # The trainer itself. This is the APK to install for practice; the diagnostics one below is only
+  # for the live-audio measurements.
+  trainer-apk:
+    name: Trainer APK
+    runs-on: ubuntu-latest
+    env:
+      # Shown on screen next to the version, so it is always clear which commit is on the phone.
+      MMM_BUILD_ID: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: ""
+
+      - name: Install SDK packages
+        run: sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build trainer APK
+        run: ./gradlew :app:assembleDebug --stacktrace
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: trainer-apk
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
 
   # Builds the standalone capture diagnostics APK. This is how the live-audio questions get
   # answered: the APK has to reach a real phone, because what it measures - whether a given app
@@ -42,6 +79,8 @@ jobs:
   diagnostics-apk:
     name: Diagnostics APK
     runs-on: ubuntu-latest
+    env:
+      MMM_BUILD_ID: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
 

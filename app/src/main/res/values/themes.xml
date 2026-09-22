@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      Compose draws everything; this only hands over a bare window. Light and dark come from the
+      two platform NoActionBar variants paired through a -night qualifier, because the platform has
+      no DayNight.NoActionBar - the diagnostics build found that out the hard way.
+    -->
+    <style name="Theme.MmmTrainer" parent="@android:style/Theme.DeviceDefault.Light.NoActionBar">
+        <item name="android:windowBackground">?android:attr/colorBackground</item>
+    </style>
+</resources>
