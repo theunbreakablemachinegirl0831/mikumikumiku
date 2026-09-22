@@ -189,7 +189,7 @@ private fun UsbCard(state: DiagnosticsUiState, viewModel: DiagnosticsViewModel) 
                 Text(
                     when {
                         usb.holdingExclusively -> "성립: Android가 DAC을 놓았다. 이제 DAC은 우리 것이다."
-                        usb.acoustic != null -> "아직이다: ${usb.acoustic.label}"
+                        usb.acoustic != null -> "아직이다: ${usb.acoustic?.label}"
                         claim.claimed -> "인터페이스 점유됨 - 아래에서 실제로 들리는 곳을 골라야 판정된다."
                         else -> "실패: 인터페이스를 점유하지 못했다."
                     },
