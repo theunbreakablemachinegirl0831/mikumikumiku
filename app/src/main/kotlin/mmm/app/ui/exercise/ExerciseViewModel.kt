@@ -19,6 +19,7 @@ import mmm.app.source.StimulusSource
 import mmm.training.AnswerDraft
 import mmm.training.Curriculum
 import mmm.training.ExerciseFamily
+import mmm.training.FilterOverrides
 import mmm.training.Question
 import mmm.training.SessionStats
 import mmm.training.TrainingSession
@@ -37,6 +38,11 @@ data class ExerciseUiState(
     val levelCount: Int = 1,
     val levelName: String = "",
     val levelDescription: String = "",
+    /**
+     * Set when the listener's own filter settings replace the ladder's, because the level
+     * description still quotes the ladder's numbers and would otherwise say the wrong thing.
+     */
+    val filterNote: String? = null,
     val playingId: String? = null,
     val picks: List<String> = emptyList(),
     val canSubmit: Boolean = false,
@@ -84,12 +90,22 @@ class ExerciseViewModel(
                 StimulusSource.load(app, settings.source, settings.excerptSeconds)
             }
             source = loaded
+            val overrides = if (family in FilterOverrides.APPLIES_TO) {
+                settings.filterOverrides()
+            } else {
+                FilterOverrides.NONE
+            }
             session = TrainingSession(
                 family = family,
                 random = Random(System.nanoTime()),
                 startLevel = app.progress.level(family),
+                overrides = overrides,
             )
-            _ui.value = _ui.value.copy(sourceLabel = loaded.label, error = null)
+            _ui.value = _ui.value.copy(
+                sourceLabel = loaded.label,
+                error = null,
+                filterNote = describe(overrides),
+            )
             nextQuestion()
         } catch (e: Exception) {
             _ui.value = _ui.value.copy(
@@ -184,6 +200,18 @@ class ExerciseViewModel(
     private fun publishDraft(current: AnswerDraft) {
         _ui.value = _ui.value.copy(picks = current.selected, canSubmit = current.isComplete)
     }
+
+    private fun describe(overrides: FilterOverrides): String? {
+        if (!overrides.isActive) return null
+        val parts = listOfNotNull(
+            overrides.gainDb?.let { "게인 ±${trim(it)} dB" },
+            overrides.q?.let { "Q ${trim(it)}" },
+        )
+        return "사용자 지정 필터: ${parts.joinToString(" · ")} - 레벨 설명의 값 대신 적용된다"
+    }
+
+    private fun trim(value: Double): String =
+        if (value == kotlin.math.floor(value)) value.toInt().toString() else value.toString()
 
     /** Ranking needs the order on the buttons; everything else just needs "is it picked". */
     fun rankOf(choiceId: String): Int? = draft?.rankOf(choiceId)

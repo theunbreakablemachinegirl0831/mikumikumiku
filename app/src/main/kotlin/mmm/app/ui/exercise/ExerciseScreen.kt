@@ -89,6 +89,9 @@ private fun QuestionContent(state: ExerciseUiState, question: Question, vm: Exer
     }
 
     Text(state.levelDescription, style = MaterialTheme.typography.bodySmall)
+    state.filterNote?.let {
+        Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+    }
     Text(question.prompt, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
 
     StimulusRow(question, state.playingId, vm)
