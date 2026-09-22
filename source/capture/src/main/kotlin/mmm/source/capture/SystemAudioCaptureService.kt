@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import mmm.audio.AudioOutput
+import mmm.audio.AudioSink
 import mmm.audio.OutputRoute
 import mmm.audio.PlaybackEngine
 import mmm.dsp.stream.RingBufferSource
@@ -128,8 +129,16 @@ public class SystemAudioCaptureService : Service() {
         mediaProjection.registerCallback(projectionCallback, null)
         projection = mediaProjection
 
-        val sampleRate = AudioOutput.preferredSampleRate(audioManager)
+        // An injected sink (the claimed USB DAC) dictates the rate: there is no resampler between
+        // capture and the bus, so capture has to run at whatever the DAC was set to.
+        val injected = pendingSink
+        val sampleRate = injected?.sampleRate ?: AudioOutput.preferredSampleRate(audioManager)
         val channels = 2
+        if (injected != null && injected.channels != channels) {
+            _state.value = CaptureState.Failed("출력 장치가 ${injected.channels}채널이다 - 스테레오만 지원한다")
+            releaseProjection()
+            return
+        }
 
         val config = AudioPlaybackCaptureConfiguration.Builder(mediaProjection)
             .addMatchingUsage(AudioAttributes.USAGE_MEDIA)
@@ -166,9 +175,13 @@ public class SystemAudioCaptureService : Service() {
         // A second of slack absorbs scheduling jitter between the capture and playback threads
         // without adding meaningful latency, because the reader drains it as fast as it fills.
         val ringBuffer = RingBufferSource(sampleRate, channels, capacityFrames = sampleRate)
-        val output = AudioOutput(sampleRate, channels, route)
+        val trackOutput = if (injected == null) AudioOutput(sampleRate, channels, route) else null
+        val output: AudioSink = injected ?: requireNotNull(trackOutput)
+        pendingSink = null
+        // The capture ring is upstream of the sink; a sink that corrects clock drift has to count it.
+        output.attachUpstream { ringBuffer.availableFrames }
         val routedDevice = if (route == OutputRoute.PREFERRED_DEVICE) {
-            output.applyPreferredDevice(audioManager)
+            trackOutput?.applyPreferredDevice(audioManager)
         } else {
             null
         }
@@ -193,7 +206,8 @@ public class SystemAudioCaptureService : Service() {
             route = route,
             latencyMs = captureLatencyMs + playback.latencyFrames * 1000 / sampleRate,
             outputDevice = routedDevice?.productName?.toString()
-                ?: output.routedDevice?.productName?.toString(),
+                ?: trackOutput?.routedDevice?.productName?.toString()
+                ?: "USB DAC (직접 출력)",
         )
     }
 
@@ -327,6 +341,14 @@ public class SystemAudioCaptureService : Service() {
         public const val EXTRA_RESULT_CODE: String = "resultCode"
         public const val EXTRA_RESULT_DATA: String = "resultData"
         public const val EXTRA_ROUTE: String = "route"
+
+        /**
+         * A sink for the next capture to play to instead of an `AudioTrack`, consumed when capture
+         * starts. Set it before starting the service: the start Intent cannot carry an object, and
+         * the service is not bound yet at that point.
+         */
+        @Volatile
+        public var pendingSink: AudioSink? = null
 
         private const val CHANNEL_ID = "mmm_capture"
         private const val NOTIFICATION_ID = 0x4d4d

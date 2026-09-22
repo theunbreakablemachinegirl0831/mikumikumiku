@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import mmm.audio.AudioSink
 import mmm.audio.OutputRoute
 import mmm.dsp.AudioProcessor
 
@@ -59,8 +60,13 @@ public class CaptureController(
         return manager.createScreenCaptureIntent()
     }
 
-    /** Call with the Activity result from [permissionIntent]. */
-    public fun start(resultCode: Int, resultData: Intent, route: OutputRoute) {
+    /**
+     * Call with the Activity result from [permissionIntent].
+     *
+     * @param sink where to play the processed audio; null for an `AudioTrack` on [route]
+     */
+    public fun start(resultCode: Int, resultData: Intent, route: OutputRoute, sink: AudioSink? = null) {
+        SystemAudioCaptureService.pendingSink = sink
         val intent = SystemAudioCaptureService.startIntent(context, resultCode, resultData, route)
         context.startForegroundService(intent)
         if (!bound) {
