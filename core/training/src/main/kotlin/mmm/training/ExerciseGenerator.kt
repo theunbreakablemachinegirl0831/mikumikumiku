@@ -49,7 +49,7 @@ internal object GeneratorSupport {
             choices = stimuli.map { Choice(it.id, it.label) },
             correctChoiceIds = listOf(letter(targetIndex)),
             level = level,
-            explanation = "${letter(targetIndex)} was processed: ${artifact.description}",
+            explanation = "${letter(targetIndex)}에 처리가 걸려 있었다: ${artifact.description}",
         )
     }
 
@@ -72,8 +72,8 @@ internal object GeneratorSupport {
         format = QuestionFormat.IDENTIFY,
         prompt = prompt,
         stimuli = listOf(
-            Stimulus(id = "ref", label = "Reference", spec = ArtifactSpec.None),
-            Stimulus(id = "test", label = "Processed", spec = artifact),
+            Stimulus(id = "ref", label = "원본", spec = ArtifactSpec.None),
+            Stimulus(id = "test", label = "처리됨", spec = artifact),
         ),
         choices = choices,
         correctChoiceIds = listOf(correctChoiceId),

@@ -29,14 +29,14 @@ public class DistortionGenerator : ExerciseGenerator {
     private val obviousTypes = listOf(DistortionType.HARD_CLIP, DistortionType.SOFT_CLIP, DistortionType.CROSSOVER)
 
     private val ladder = listOf(
-        Params(0.85, 2, false, obviousTypes) to LevelSpec(0, "Gross distortion", "Heavily driven, two alternatives"),
-        Params(0.6, 2, false, obviousTypes) to LevelSpec(1, "Strong", "Still obvious on most material"),
-        Params(0.45, 3, false, allTypes) to LevelSpec(2, "Moderate", "Three alternatives, all types"),
-        Params(0.32, 3, false, allTypes) to LevelSpec(3, "Light", "Getting subtle"),
-        Params(0.22, 3, false, allTypes) to LevelSpec(4, "Near threshold", "Audible only on the right material"),
-        Params(0.7, 3, true, obviousTypes) to LevelSpec(5, "Naming the character", "Strong, but now identify the type"),
-        Params(0.5, 3, true, allTypes) to LevelSpec(6, "Character, all types", "Five kinds to tell apart"),
-        Params(0.35, 3, true, allTypes) to LevelSpec(7, "Character, subtle", "Type identification at low drive"),
+        Params(0.85, 2, false, obviousTypes) to LevelSpec(0, "심한 왜곡", "강하게 걸림, 보기 2개"),
+        Params(0.6, 2, false, obviousTypes) to LevelSpec(1, "강함", "대부분의 음원에서 여전히 뚜렷하다"),
+        Params(0.45, 3, false, allTypes) to LevelSpec(2, "보통", "보기 3개, 모든 종류"),
+        Params(0.32, 3, false, allTypes) to LevelSpec(3, "약함", "미묘해지기 시작한다"),
+        Params(0.22, 3, false, allTypes) to LevelSpec(4, "역치 근처", "음원을 잘 만나야 들린다"),
+        Params(0.7, 3, true, obviousTypes) to LevelSpec(5, "성격 맞히기", "강하게 걸지만 이제 종류를 맞힌다"),
+        Params(0.5, 3, true, allTypes) to LevelSpec(6, "성격 · 모든 종류", "다섯 가지를 구별한다"),
+        Params(0.35, 3, true, allTypes) to LevelSpec(7, "성격 · 미묘함", "약하게 걸린 상태에서 종류 식별"),
     )
 
     override val family: ExerciseFamily get() = ExerciseFamily.DISTORTION
@@ -52,7 +52,7 @@ public class DistortionGenerator : ExerciseGenerator {
             return GeneratorSupport.forcedChoice(
                 family = family,
                 level = level,
-                prompt = "Which one is distorted?",
+                prompt = "왜곡(Distortion)된 것은?",
                 artifact = spec,
                 alternatives = params.alternatives,
                 random = random,
@@ -63,7 +63,7 @@ public class DistortionGenerator : ExerciseGenerator {
         return GeneratorSupport.identify(
             family = family,
             level = level,
-            prompt = "What kind of distortion is this?",
+            prompt = "어떤 종류의 왜곡인가?",
             artifact = spec,
             choices = choices,
             correctChoiceId = type.name,

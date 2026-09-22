@@ -30,23 +30,23 @@ public class BandIdGenerator : ExerciseGenerator {
 
     private val ladder = listOf(
         Params(BandResolution.OCTAVE, 125.0, 4000.0, 12.0, false) to
-            LevelSpec(0, "Octave, mid only", "Five octave bands, a big +12 dB boost"),
+            LevelSpec(0, "옥타브 · 중역만", "옥타브 밴드 5개, +12 dB 큰 부스트"),
         Params(BandResolution.OCTAVE, 63.0, 16000.0, 12.0, false) to
-            LevelSpec(1, "Octave, full range", "The whole spectrum, still +12 dB"),
+            LevelSpec(1, "옥타브 · 전 대역", "전체 스펙트럼, 여전히 +12 dB"),
         Params(BandResolution.OCTAVE, 31.5, 16000.0, 9.0, true) to
-            LevelSpec(2, "Octave, boosts and cuts", "Now dips count too, at 9 dB"),
+            LevelSpec(2, "옥타브 · 부스트와 컷", "이제 딥(컷)도 나온다, 9 dB"),
         Params(BandResolution.HALF_OCTAVE, 63.0, 16000.0, 9.0, false) to
-            LevelSpec(3, "Half octave", "Twice as many answers to choose between"),
+            LevelSpec(3, "1/2 옥타브", "고를 답이 두 배로 늘어난다"),
         Params(BandResolution.HALF_OCTAVE, 63.0, 16000.0, 6.0, true) to
-            LevelSpec(4, "Half octave, 6 dB", "Half-octave grid at 6 dB, boosts and cuts"),
+            LevelSpec(4, "1/2 옥타브 · 6 dB", "1/2 옥타브 격자, 6 dB 부스트와 컷"),
         Params(BandResolution.THIRD_OCTAVE, 63.0, 16000.0, 6.0, false) to
-            LevelSpec(5, "Third octave", "The resolution used in most measurement work"),
+            LevelSpec(5, "1/3 옥타브", "대부분의 측정 작업에서 쓰는 해상도"),
         Params(BandResolution.THIRD_OCTAVE, 40.0, 16000.0, 4.0, true) to
-            LevelSpec(6, "Third octave, 4 dB", "Third-octave grid at 4 dB"),
+            LevelSpec(6, "1/3 옥타브 · 4 dB", "1/3 옥타브 격자, 4 dB"),
         Params(BandResolution.SIXTH_OCTAVE, 63.0, 16000.0, 4.0, false) to
-            LevelSpec(7, "Sixth octave", "Very fine grid, 4 dB"),
+            LevelSpec(7, "1/6 옥타브", "아주 촘촘한 격자, 4 dB"),
         Params(BandResolution.SIXTH_OCTAVE, 40.0, 16000.0, 2.5, true) to
-            LevelSpec(8, "Sixth octave, 2.5 dB", "About as fine as trained listeners get"),
+            LevelSpec(8, "1/6 옥타브 · 2.5 dB", "훈련된 청취자의 한계에 가까운 수준"),
     )
 
     override val family: ExerciseFamily get() = ExerciseFamily.BAND_ID
@@ -62,12 +62,12 @@ public class BandIdGenerator : ExerciseGenerator {
         val spec = ArtifactSpec.BandBoost(band, gainDb)
 
         val choices = grid.bands.map { Choice(id = "b${it.index}", label = it.label, ordinal = it.centerHz) }
-        val direction = if (gainDb >= 0) "boosted" else "cut"
+        val direction = if (gainDb >= 0) "부스트" else "컷"
 
         return GeneratorSupport.identify(
             family = family,
             level = level,
-            prompt = "Which band was $direction?",
+            prompt = "어느 밴드가 ${direction}되었나?",
             artifact = spec,
             choices = choices,
             correctChoiceId = "b${band.index}",

@@ -31,19 +31,19 @@ public class CompressionGenerator : ExerciseGenerator {
 
     private val ladder = listOf(
         Params(listOf(1.0, 20.0), -35.0, 1.0, 60.0, false) to
-            LevelSpec(0, "Squashed or not", "Limiting against untouched audio"),
+            LevelSpec(0, "눌렸나 안 눌렸나", "리미팅 vs 원본"),
         Params(listOf(1.0, 8.0), -30.0, 3.0, 80.0, false) to
-            LevelSpec(1, "Heavy compression", "8:1 against untouched audio"),
+            LevelSpec(1, "강한 컴프레션", "8:1 vs 원본"),
         Params(listOf(1.0, 4.0), -25.0, 10.0, 120.0, false) to
-            LevelSpec(2, "Moderate", "4:1, slower attack"),
+            LevelSpec(2, "보통", "4:1, 느린 어택"),
         Params(listOf(1.0, 2.0), -22.0, 20.0, 200.0, false) to
-            LevelSpec(3, "Gentle", "2:1 - the point where most people stop hearing it"),
+            LevelSpec(3, "완만함", "2:1 - 대부분이 못 듣기 시작하는 지점"),
         Params(listOf(1.5, 4.0, 12.0), -28.0, 5.0, 100.0, true) to
-            LevelSpec(4, "Rank three", "Put three amounts of compression in order"),
+            LevelSpec(4, "3개 순위", "세 가지 컴프레션 양을 순서대로"),
         Params(listOf(2.0, 4.0, 8.0), -25.0, 10.0, 150.0, true) to
-            LevelSpec(5, "Rank, closer", "Ratios only one step apart"),
+            LevelSpec(5, "순위 · 더 가깝게", "비율이 한 단계씩만 차이난다"),
         Params(listOf(2.0, 3.0, 4.0, 6.0), -25.0, 15.0, 180.0, true) to
-            LevelSpec(6, "Rank four", "Four stimuli, small ratio steps"),
+            LevelSpec(6, "4개 순위", "자극 4개, 작은 비율 차이"),
     )
 
     override val family: ExerciseFamily get() = ExerciseFamily.COMPRESSION
@@ -66,7 +66,7 @@ public class CompressionGenerator : ExerciseGenerator {
         return GeneratorSupport.forcedChoice(
             family = family,
             level = level,
-            prompt = "Which one is compressed?",
+            prompt = "컴프레션(Compression)이 걸린 것은?",
             artifact = spec,
             alternatives = 2 + (level / 3),
             random = random,
@@ -96,12 +96,12 @@ public class CompressionGenerator : ExerciseGenerator {
             id = GeneratorSupport.questionId(random),
             family = family,
             format = QuestionFormat.RANK,
-            prompt = "Put these in order, least compressed first.",
+            prompt = "덜 눌린 것부터 순서대로 누른다.",
             stimuli = stimuli,
             choices = stimuli.map { Choice(it.id, it.label) },
             correctChoiceIds = correctOrder,
             level = level,
-            explanation = presented
+            explanation = "각 자극의 비율: " + presented
                 .mapIndexed { i, (ratio, _) -> "${GeneratorSupport.letter(i)} = ${ratio}:1" }
                 .joinToString(", "),
         )

@@ -10,13 +10,13 @@ public enum class ExerciseFamily(
     public val displayName: String,
     public val skill: String,
 ) {
-    BAND_ID("band_id", "Band identification", "Naming the frequency region of a spectral change"),
-    RESONANCE("resonance", "Resonance detection", "Hearing narrow, ringing peaks"),
-    BANDWIDTH("bandwidth", "Bandwidth", "Judging where the response rolls off"),
-    DISTORTION("distortion", "Distortion", "Detecting non-linearity"),
-    COMPRESSION("compression", "Dynamics", "Hearing dynamic-range reduction"),
-    REVERB("reverb", "Reverberation", "Judging decay time and wet level"),
-    SPECTRAL_BALANCE("spectral_balance", "Spectral balance", "Judging broad tonal tilt"),
+    BAND_ID("band_id", "밴드 식별 (Band ID)", "스펙트럼 변화가 어느 주파수 대역인지 맞힌다"),
+    RESONANCE("resonance", "레조넌스 탐지 (Resonance)", "좁고 울리는 피크를 알아챈다"),
+    BANDWIDTH("bandwidth", "대역폭 (Bandwidth)", "응답이 어디서 깎이는지 판단한다"),
+    DISTORTION("distortion", "왜곡 (Distortion)", "비선형성을 알아채고 종류를 구별한다"),
+    COMPRESSION("compression", "다이내믹스 (Compression)", "다이내믹 레인지가 눌린 것을 듣는다"),
+    REVERB("reverb", "잔향 (Reverb)", "잔향 시간과 웻 레벨을 판단한다"),
+    SPECTRAL_BALANCE("spectral_balance", "톤 밸런스 (Spectral balance)", "전체 음색의 기울기를 판단한다"),
 }
 
 /** How a question is put to the learner. */

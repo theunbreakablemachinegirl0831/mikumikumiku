@@ -28,19 +28,19 @@ public class ReverbGenerator : ExerciseGenerator {
 
     private val ladder = listOf(
         Params(listOf(0.3, 1.2, 4.0), 0.30, false) to
-            LevelSpec(0, "Room, hall or cathedral", "Decay times far apart"),
+            LevelSpec(0, "방 · 홀 · 성당", "잔향 시간 차이가 크다"),
         Params(listOf(0.4, 0.9, 2.0, 4.0), 0.28, false) to
-            LevelSpec(1, "Four decay times", "Still clearly separated"),
+            LevelSpec(1, "잔향 시간 4가지", "여전히 뚜렷이 구분된다"),
         Params(listOf(0.5, 0.8, 1.3, 2.0, 3.2), 0.25, false) to
-            LevelSpec(2, "Five decay times", "Roughly half-steps apart"),
+            LevelSpec(2, "잔향 시간 5가지", "대략 반 단계 간격"),
         Params(listOf(0.6, 0.85, 1.2, 1.7, 2.4), 0.20, false) to
-            LevelSpec(3, "Closer decay times", "Quieter reverb, closer spacing"),
+            LevelSpec(3, "더 가까운 잔향 시간", "더 작은 리버브, 더 좁은 간격"),
         Params(listOf(1.2), 0.0, true, listOf(0.05, 0.15, 0.30, 0.50)) to
-            LevelSpec(4, "How wet?", "Fixed 1.2 s decay, judge the amount"),
+            LevelSpec(4, "얼마나 젖었나?", "1.2초 고정, 양을 판단한다"),
         Params(listOf(1.2), 0.0, true, listOf(0.04, 0.08, 0.15, 0.25, 0.40)) to
-            LevelSpec(5, "Wet level, fine", "Five levels, down to nearly dry"),
+            LevelSpec(5, "웻 레벨 · 세밀", "5단계, 거의 드라이까지"),
         Params(listOf(0.7, 0.9, 1.1, 1.4, 1.8), 0.15, false) to
-            LevelSpec(6, "Decay, quiet and close", "15 % wet, quarter-step decay spacing"),
+            LevelSpec(6, "잔향 · 작고 촘촘", "웻 15 %, 1/4 단계 간격"),
     )
 
     override val family: ExerciseFamily get() = ExerciseFamily.REVERB
@@ -60,7 +60,7 @@ public class ReverbGenerator : ExerciseGenerator {
             return GeneratorSupport.identify(
                 family = family,
                 level = level,
-                prompt = "How much reverb was added?",
+                prompt = "리버브(Reverb)가 얼마나 걸렸나?",
                 artifact = spec,
                 choices = choices,
                 correctChoiceId = "m$index",
@@ -72,12 +72,12 @@ public class ReverbGenerator : ExerciseGenerator {
         val decay = params.decays[index]
         val spec = ArtifactSpec.Reverb(decay, params.mix)
         val choices = params.decays.mapIndexed { i, d ->
-            Choice(id = "d$i", label = "$d s", ordinal = d)
+            Choice(id = "d$i", label = "${d}초", ordinal = d)
         }
         return GeneratorSupport.identify(
             family = family,
             level = level,
-            prompt = "How long is the decay?",
+            prompt = "잔향 시간(Decay)은 얼마나 긴가?",
             artifact = spec,
             choices = choices,
             correctChoiceId = "d$index",

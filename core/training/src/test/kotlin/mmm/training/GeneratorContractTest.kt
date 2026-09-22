@@ -92,6 +92,24 @@ class GeneratorContractTest {
     }
 
     @Test
+    fun `everything the learner reads is in Korean`() {
+        // These strings go straight onto the screen. English technical terms are welcome in
+        // brackets, but every line has to carry Korean, or a translated app ships half-English.
+        val hangul = Regex("[가-힣]")
+        eachLevel { family, level, question ->
+            val where = "$family level $level"
+            assertTrue(hangul.containsMatchIn(question.prompt), "$where prompt: ${question.prompt}")
+            assertTrue(hangul.containsMatchIn(question.explanation), "$where explanation: ${question.explanation}")
+        }
+        for (family in Curriculum.families) {
+            assertTrue(hangul.containsMatchIn(family.displayName), "$family has no Korean name")
+            Curriculum.levels(family).forEach {
+                assertTrue(hangul.containsMatchIn(it.name + it.description), "$family ${it.name}")
+            }
+        }
+    }
+
+    @Test
     fun `every family has a non-trivial ladder with described levels`() {
         for (family in Curriculum.families) {
             val levels = Curriculum.levels(family)

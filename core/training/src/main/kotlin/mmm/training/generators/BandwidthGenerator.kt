@@ -29,14 +29,14 @@ public class BandwidthGenerator : ExerciseGenerator {
     )
 
     private val ladder = listOf(
-        Params(2.0, 4, 48, false) to LevelSpec(0, "High cut, wide steps", "Two octaves apart, steep 48 dB/oct"),
-        Params(1.0, 5, 48, false) to LevelSpec(1, "High cut, one octave", "Octave steps"),
-        Params(1.0, 5, 24, false) to LevelSpec(2, "Gentler slope", "24 dB/oct is harder to place"),
-        Params(2.0, 4, 48, true) to LevelSpec(3, "Low cut introduced", "Now the bottom end rolls off"),
-        Params(1.0, 5, 24, true) to LevelSpec(4, "Either end", "Octave steps at either extreme"),
-        Params(0.5, 5, 24, true) to LevelSpec(5, "Half-octave steps", "Candidates close together"),
-        Params(0.5, 6, 12, true) to LevelSpec(6, "Shallow slope", "12 dB/oct, half-octave steps"),
-        Params(0.33, 6, 12, true) to LevelSpec(7, "Third-octave steps", "As fine as the exercise goes"),
+        Params(2.0, 4, 48, false) to LevelSpec(0, "하이컷 · 넓은 간격", "2옥타브 간격, 가파른 48 dB/oct"),
+        Params(1.0, 5, 48, false) to LevelSpec(1, "하이컷 · 1옥타브", "1옥타브 간격"),
+        Params(1.0, 5, 24, false) to LevelSpec(2, "완만한 기울기", "24 dB/oct는 위치를 짚기 더 어렵다"),
+        Params(2.0, 4, 48, true) to LevelSpec(3, "로우컷 등장", "이제 저역이 깎인다"),
+        Params(1.0, 5, 24, true) to LevelSpec(4, "양 끝 모두", "어느 쪽 끝이든 1옥타브 간격"),
+        Params(0.5, 5, 24, true) to LevelSpec(5, "1/2 옥타브 간격", "후보들이 가깝다"),
+        Params(0.5, 6, 12, true) to LevelSpec(6, "얕은 기울기", "12 dB/oct, 1/2 옥타브 간격"),
+        Params(0.33, 6, 12, true) to LevelSpec(7, "1/3 옥타브 간격", "이 과제의 최고 난도"),
     )
 
     override val family: ExerciseFamily get() = ExerciseFamily.BANDWIDTH
@@ -71,7 +71,7 @@ public class BandwidthGenerator : ExerciseGenerator {
         return GeneratorSupport.identify(
             family = family,
             level = level,
-            prompt = if (lowCutTrial) "Where is the low-frequency cutoff?" else "Where is the high-frequency cutoff?",
+            prompt = if (lowCutTrial) "저역 차단 주파수(로우컷)는 어디인가?" else "고역 차단 주파수(하이컷)는 어디인가?",
             artifact = spec,
             choices = choices,
             correctChoiceId = "f$correctIndex",

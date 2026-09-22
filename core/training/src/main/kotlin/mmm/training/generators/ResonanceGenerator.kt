@@ -22,13 +22,13 @@ public class ResonanceGenerator : ExerciseGenerator {
     private data class Params(val q: Double, val gainDb: Double, val alternatives: Int)
 
     private val ladder = listOf(
-        Params(6.0, 12.0, 2) to LevelSpec(0, "Obvious ring", "Q 6, +12 dB, two alternatives"),
-        Params(8.0, 9.0, 2) to LevelSpec(1, "Q 8, 9 dB", "Slightly narrower and quieter"),
-        Params(10.0, 7.0, 3) to LevelSpec(2, "Three alternatives", "Q 10, +7 dB"),
-        Params(14.0, 5.0, 3) to LevelSpec(3, "Q 14, 5 dB", "Getting narrow"),
-        Params(20.0, 4.0, 3) to LevelSpec(4, "Q 20, 4 dB", "Narrow enough to hide in a mix"),
-        Params(28.0, 3.0, 3) to LevelSpec(5, "Q 28, 3 dB", "Near the threshold for most listeners"),
-        Params(40.0, 2.0, 3) to LevelSpec(6, "Q 40, 2 dB", "Trained-listener territory"),
+        Params(6.0, 12.0, 2) to LevelSpec(0, "뚜렷한 울림", "Q 6, +12 dB, 보기 2개"),
+        Params(8.0, 9.0, 2) to LevelSpec(1, "Q 8 · 9 dB", "조금 더 좁고 작다"),
+        Params(10.0, 7.0, 3) to LevelSpec(2, "보기 3개", "Q 10, +7 dB"),
+        Params(14.0, 5.0, 3) to LevelSpec(3, "Q 14 · 5 dB", "좁아지기 시작한다"),
+        Params(20.0, 4.0, 3) to LevelSpec(4, "Q 20 · 4 dB", "믹스 속에 숨을 만큼 좁다"),
+        Params(28.0, 3.0, 3) to LevelSpec(5, "Q 28 · 3 dB", "대부분의 청취자에게 역치 근처"),
+        Params(40.0, 2.0, 3) to LevelSpec(6, "Q 40 · 2 dB", "훈련된 청취자의 영역"),
     )
 
     override val family: ExerciseFamily get() = ExerciseFamily.RESONANCE
@@ -44,7 +44,7 @@ public class ResonanceGenerator : ExerciseGenerator {
         return GeneratorSupport.forcedChoice(
             family = family,
             level = level,
-            prompt = "Which one has a resonance?",
+            prompt = "레조넌스(Resonance)가 있는 것은?",
             artifact = spec,
             alternatives = params.alternatives,
             random = random,

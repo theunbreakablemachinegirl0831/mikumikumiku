@@ -13,19 +13,19 @@ import kotlin.math.tanh
 /** The flavours of non-linearity the distortion exercises can present. */
 public enum class DistortionType(public val displayName: String) {
     /** Amplifier-style symmetric soft clipping - mostly odd harmonics. */
-    SOFT_CLIP("Soft clip"),
+    SOFT_CLIP("소프트 클립 (Soft clip)"),
 
     /** Digital-style hard clipping - harsh, high-order odd harmonics. */
-    HARD_CLIP("Hard clip"),
+    HARD_CLIP("하드 클립 (Hard clip)"),
 
     /** Asymmetric transfer curve - adds second harmonic, the "tube warmth" character. */
-    ASYMMETRIC("Asymmetric"),
+    ASYMMETRIC("비대칭 (Asymmetric)"),
 
     /** Class-B style crossover notch near zero - very audible on quiet passages. */
-    CROSSOVER("Crossover"),
+    CROSSOVER("크로스오버 (Crossover)"),
 
     /** Coarse requantisation without dither - granular, level-dependent grunge. */
-    QUANTIZATION("Quantisation"),
+    QUANTIZATION("양자화 (Quantization)"),
 }
 
 /**

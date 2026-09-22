@@ -31,13 +31,13 @@ public sealed interface ArtifactSpec {
 
     /** The unprocessed reference. */
     public data object None : ArtifactSpec {
-        override val description: String get() = "Unprocessed"
+        override val description: String get() = "처리 없음"
         override fun createProcessor(): AudioProcessor = PassThroughProcessor
     }
 
     public data class BandBoost(val band: Band, val gainDb: Double) : ArtifactSpec {
         override val description: String
-            get() = "${if (gainDb >= 0) "+" else ""}${fmt(gainDb)} dB at ${band.label}"
+            get() = "${band.label} 대역 ${if (gainDb >= 0) "+" else ""}${fmt(gainDb)} dB"
         override fun createProcessor(): AudioProcessor = BandBoostProcessor(band, gainDb)
     }
 
@@ -47,7 +47,7 @@ public sealed interface ArtifactSpec {
         val gainDb: Double,
     ) : ArtifactSpec {
         override val description: String
-            get() = "Resonance at ${fmt(frequencyHz)} Hz, Q ${fmt(q)}, +${fmt(gainDb)} dB"
+            get() = "${fmt(frequencyHz)} Hz 레조넌스, Q ${fmt(q)}, +${fmt(gainDb)} dB"
         override fun createProcessor(): AudioProcessor = ResonanceProcessor(frequencyHz, q, gainDb)
     }
 
@@ -58,7 +58,7 @@ public sealed interface ArtifactSpec {
     ) : ArtifactSpec {
         override val description: String
             get() = buildString {
-                append("Band limited to ")
+                append("대역 제한 ")
                 append(fmt(lowCutHz)).append(" Hz - ")
                 append(fmt(highCutHz)).append(" Hz")
                 append(" (").append(slopeDbPerOctave).append(" dB/oct)")
@@ -69,7 +69,7 @@ public sealed interface ArtifactSpec {
 
     public data class Distortion(val type: DistortionType, val amount: Double) : ArtifactSpec {
         override val description: String
-            get() = "${type.displayName}, amount ${fmt(amount * 100)} %"
+            get() = "${type.displayName}, 강도 ${fmt(amount * 100)} %"
         override fun createProcessor(): AudioProcessor = DistortionProcessor(type, amount)
     }
 
@@ -81,21 +81,21 @@ public sealed interface ArtifactSpec {
         val makeupGainDb: Double = 0.0,
     ) : ArtifactSpec {
         override val description: String
-            get() = "${fmt(ratio)}:1 above ${fmt(thresholdDb)} dB " +
-                "(attack ${fmt(attackMs)} ms, release ${fmt(releaseMs)} ms)"
+            get() = "${fmt(thresholdDb)} dB 이상에서 ${fmt(ratio)}:1 " +
+                "(어택 ${fmt(attackMs)} ms, 릴리즈 ${fmt(releaseMs)} ms)"
         override fun createProcessor(): AudioProcessor =
             CompressionProcessor(thresholdDb, ratio, attackMs, releaseMs, makeupGainDb = makeupGainDb)
     }
 
     public data class Reverb(val decaySeconds: Double, val mix: Double) : ArtifactSpec {
         override val description: String
-            get() = "Reverb ${fmt(decaySeconds)} s at ${fmt(mix * 100)} % wet"
+            get() = "리버브 ${fmt(decaySeconds)}초, 웻 ${fmt(mix * 100)} %"
         override fun createProcessor(): AudioProcessor = ReverbProcessor(decaySeconds, mix)
     }
 
     public data class SpectralTilt(val tiltDb: Double, val pivotHz: Double = 1000.0) : ArtifactSpec {
         override val description: String
-            get() = "${if (tiltDb >= 0) "Bright" else "Dark"} tilt ${fmt(kotlin.math.abs(tiltDb))} dB"
+            get() = "${if (tiltDb >= 0) "밝게" else "어둡게"} ${fmt(kotlin.math.abs(tiltDb))} dB 기울임"
         override fun createProcessor(): AudioProcessor = SpectralTiltProcessor(tiltDb, pivotHz)
     }
 
