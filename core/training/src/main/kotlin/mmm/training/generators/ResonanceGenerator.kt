@@ -3,6 +3,7 @@ package mmm.training.generators
 import mmm.training.ArtifactSpec
 import mmm.training.ExerciseFamily
 import mmm.training.ExerciseGenerator
+import mmm.training.FilterOverrides
 import mmm.training.GeneratorSupport
 import mmm.training.LevelSpec
 import mmm.training.Question
@@ -35,11 +36,15 @@ public class ResonanceGenerator : ExerciseGenerator {
 
     override val levels: List<LevelSpec> = ladder.map { it.second }
 
-    override fun generate(level: Int, random: Random): Question {
+    override fun generate(level: Int, random: Random, overrides: FilterOverrides): Question {
         val params = ladder[level.coerceIn(ladder.indices)].first
         // Log-uniform across 100 Hz - 8 kHz; uniform in Hz would put nearly every trial in the treble.
         val frequency = 100.0 * (80.0).pow(random.nextDouble())
-        val spec = ArtifactSpec.Resonance(frequency, params.q, params.gainDb)
+        val spec = ArtifactSpec.Resonance(
+            frequencyHz = frequency,
+            q = overrides.q ?: params.q,
+            gainDb = overrides.gainDb ?: params.gainDb,
+        )
 
         return GeneratorSupport.forcedChoice(
             family = family,

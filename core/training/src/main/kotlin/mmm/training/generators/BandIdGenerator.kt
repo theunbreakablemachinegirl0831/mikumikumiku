@@ -6,6 +6,7 @@ import mmm.training.ArtifactSpec
 import mmm.training.Choice
 import mmm.training.ExerciseFamily
 import mmm.training.ExerciseGenerator
+import mmm.training.FilterOverrides
 import mmm.training.GeneratorSupport
 import mmm.training.LevelSpec
 import mmm.training.Question
@@ -53,13 +54,14 @@ public class BandIdGenerator : ExerciseGenerator {
 
     override val levels: List<LevelSpec> = ladder.map { it.second }
 
-    override fun generate(level: Int, random: Random): Question {
+    override fun generate(level: Int, random: Random, overrides: FilterOverrides): Question {
         val params = ladder[level.coerceIn(ladder.indices)].first
         val grid = BandGrid(params.resolution, params.lowHz, params.highHz)
         val band = grid.bands[random.nextInt(grid.size)]
 
-        val gainDb = if (params.allowCuts && random.nextBoolean()) -params.gainDb else params.gainDb
-        val spec = ArtifactSpec.BandBoost(band, gainDb)
+        val magnitude = overrides.gainDb ?: params.gainDb
+        val gainDb = if (params.allowCuts && random.nextBoolean()) -magnitude else magnitude
+        val spec = ArtifactSpec.BandBoost(band, gainDb, q = overrides.q)
 
         val choices = grid.bands.map { Choice(id = "b${it.index}", label = it.label, ordinal = it.centerHz) }
         val direction = if (gainDb >= 0) "부스트" else "컷"

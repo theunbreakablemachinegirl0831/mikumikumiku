@@ -38,6 +38,8 @@ public class TrainingSession(
     private val random: Random = Random.Default,
     startLevel: Int = 0,
     private val generator: ExerciseGenerator = Curriculum.generator(family),
+    /** Listener-chosen filter settings, applied to every question this session generates. */
+    public val overrides: FilterOverrides = FilterOverrides.NONE,
 ) {
     public val progression: LevelProgression =
         LevelProgression(maxLevel = generator.levels.lastIndex, startLevel = startLevel)
@@ -53,7 +55,8 @@ public class TrainingSession(
     public val levelSpec: LevelSpec get() = generator.levels[progression.level]
 
     /** Generates the next trial at the current level. */
-    public fun next(): Question = generator.generate(progression.level, random).also { current = it }
+    public fun next(): Question =
+        generator.generate(progression.level, random, overrides).also { current = it }
 
     /**
      * Grades [answer] against the outstanding question and advances the ladder.

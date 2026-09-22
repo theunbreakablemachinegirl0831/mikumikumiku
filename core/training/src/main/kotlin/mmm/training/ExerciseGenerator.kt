@@ -9,8 +9,15 @@ public interface ExerciseGenerator {
     /** The difficulty ladder, easiest first. */
     public val levels: List<LevelSpec>
 
-    /** @param level index into [levels]; out-of-range values are clamped. */
-    public fun generate(level: Int, random: Random): Question
+    /**
+     * @param level index into [levels]; out-of-range values are clamped.
+     * @param overrides listener-chosen filter settings; families without a filter ignore them.
+     */
+    public fun generate(
+        level: Int,
+        random: Random,
+        overrides: FilterOverrides = FilterOverrides.NONE,
+    ): Question
 }
 
 internal object GeneratorSupport {

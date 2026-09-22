@@ -35,10 +35,16 @@ public sealed interface ArtifactSpec {
         override fun createProcessor(): AudioProcessor = PassThroughProcessor
     }
 
-    public data class BandBoost(val band: Band, val gainDb: Double) : ArtifactSpec {
+    public data class BandBoost(
+        val band: Band,
+        val gainDb: Double,
+        /** Explicit Q from the listener's settings; null means "match the band's width". */
+        val q: Double? = null,
+    ) : ArtifactSpec {
         override val description: String
-            get() = "${band.label} 대역 ${if (gainDb >= 0) "+" else ""}${fmt(gainDb)} dB"
-        override fun createProcessor(): AudioProcessor = BandBoostProcessor(band, gainDb)
+            get() = "${band.label} 대역 ${if (gainDb >= 0) "+" else ""}${fmt(gainDb)} dB" +
+                (q?.let { " (Q ${fmt(it)})" } ?: "")
+        override fun createProcessor(): AudioProcessor = BandBoostProcessor(band, gainDb, q)
     }
 
     public data class Resonance(
