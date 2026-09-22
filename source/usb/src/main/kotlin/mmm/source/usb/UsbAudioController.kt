@@ -63,11 +63,8 @@ public data class UsbAudioReport(
 }
 
 /**
- * Drives discovery, permission and the exclusive claim for USB DACs.
- *
- * Deliberately stops short of playing anything. Whether the platform will hand the device over is
- * the part that decides the whole approach, and it can be answered without a line of native code;
- * the isochronous streamer is only worth writing once the answer is yes.
+ * Drives discovery, permission and the exclusive claim for USB DACs, and opens the stream on a
+ * claimed one with [openStream].
  */
 public class UsbAudioController(private val context: Context) {
 
@@ -198,6 +195,7 @@ public class UsbAudioController(private val context: Context) {
 
         val result = claimer.claim(candidate.device, candidate.function)
         val alternate = candidate.function.bestMatch(sampleRate)
+        claimedSampleRate = sampleRate
 
         if (result.claimed && alternate != null) {
             claimer.selectAlternate(alternate)
@@ -215,6 +213,21 @@ public class UsbAudioController(private val context: Context) {
             message = result.detail,
         )
         return result
+    }
+
+    /** The rate the last [claimExclusively] set the DAC to. */
+    public var claimedSampleRate: Int = 0
+        private set
+
+    /**
+     * A streamer on the claimed DAC, at [claimedSampleRate].
+     * Null unless a claim is held and an alternate setting was chosen.
+     */
+    public fun openStream(clockedProducer: Boolean): UsbIsoStreamer? {
+        val current = _report.value
+        val alternate = current.chosenAlternate ?: return null
+        if (current.claim?.claimed != true) return null
+        return claimer.openStreamer(alternate, claimedSampleRate, clockedProducer)
     }
 
     /** Records what the listener actually heard after claiming. */

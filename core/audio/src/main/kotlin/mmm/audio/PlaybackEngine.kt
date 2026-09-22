@@ -12,7 +12,7 @@ import java.util.concurrent.atomic.AtomicReference
 import kotlin.concurrent.thread
 
 /**
- * Pulls from an [AudioSource], runs the current artifact chain and writes to an [AudioOutput].
+ * Pulls from an [AudioSource], runs the current artifact chain and writes to an [AudioSink].
  *
  * The chain is swapped through an [AtomicReference] rather than mutated, so switching stimulus A to
  * stimulus B never leaves the audio thread holding a half-configured filter. The outgoing
@@ -21,7 +21,7 @@ import kotlin.concurrent.thread
  */
 public class PlaybackEngine(
     private val source: AudioSource,
-    private val output: AudioOutput,
+    private val output: AudioSink,
     private val blockFrames: Int = 512,
 ) {
     private val format = AudioFormat(output.sampleRate, output.channels, blockFrames)
@@ -129,7 +129,7 @@ public class PlaybackEngine(
                     framesProcessed += frames
                     val written = output.write(buffer)
                     if (written < 0) {
-                        lastError = "AudioTrack write failed ($written)"
+                        lastError = "Output write failed ($written)"
                         running = false
                         return
                     }

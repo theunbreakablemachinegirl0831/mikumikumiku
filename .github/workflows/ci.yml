@@ -58,7 +58,7 @@ jobs:
           packages: ""
 
       - name: Install SDK packages
-        run: sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+        run: sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0" "ndk;27.2.12479018" "cmake;3.22.1"
 
       - uses: gradle/actions/setup-gradle@v4
 
@@ -99,7 +99,7 @@ jobs:
           packages: ""
 
       - name: Install SDK packages
-        run: sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+        run: sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0" "ndk;27.2.12479018" "cmake;3.22.1"
 
       - uses: gradle/actions/setup-gradle@v4
 
@@ -133,9 +133,9 @@ jobs:
           packages: ""
 
       - name: Install SDK packages
-        run: sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+        run: sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0" "ndk;27.2.12479018" "cmake;3.22.1"
 
       - uses: gradle/actions/setup-gradle@v4
 
       - name: Assemble and unit-test library modules
-        run: ./gradlew :core:audio:assembleDebug :source:capture:assembleDebug :source:file:assembleDebug :source:capture:testDebugUnitTest --stacktrace
+        run: ./gradlew :core:audio:assembleDebug :source:capture:assembleDebug :source:file:assembleDebug :source:usb:assembleDebug :source:capture:testDebugUnitTest --stacktrace

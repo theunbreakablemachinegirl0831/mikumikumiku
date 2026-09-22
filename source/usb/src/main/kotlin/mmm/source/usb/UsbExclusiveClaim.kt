@@ -38,8 +38,8 @@ public data class ClaimResult(
  * where it is out of the way - and the listener hears one signal instead of two.
  *
  * Claiming alone is not the whole job: sound needs isochronous transfers, which Android's Java USB
- * API does not expose. What this class establishes is whether the platform will let go at all,
- * which is the question worth answering before writing a native streamer.
+ * API does not expose. [openStreamer] hands the claimed connection to [UsbIsoStreamer], which
+ * does those through usbfs.
  */
 public class UsbExclusiveClaim(
     context: Context,
@@ -51,6 +51,7 @@ public class UsbExclusiveClaim(
     private var claimedInterfaces = mutableListOf<Int>()
     private var parkedDevice: UsbDevice? = null
     private var parkOnRelease: Map<Int, Int> = emptyMap()
+    private var streamer: UsbIsoStreamer? = null
 
     public val isHolding: Boolean get() = connection != null
 
@@ -173,8 +174,39 @@ public class UsbExclusiveClaim(
         ) >= 0
     }
 
+    /**
+     * A streamer for [alternate], which must already be selected with [selectAlternate] and set to
+     * [sampleRate]. Not started; [release] stops it.
+     *
+     * @param clockedProducer see [UsbIsoStreamer]
+     */
+    public fun openStreamer(
+        alternate: UsbAudioAlternate,
+        sampleRate: Int,
+        clockedProducer: Boolean,
+    ): UsbIsoStreamer? {
+        val open = connection ?: return null
+        streamer?.stop()
+        val speed = UsbIsoNative.nativeSpeed(open.fileDescriptor)
+        // The descriptors do not say which bus speed the device came up at, and it decides whether
+        // bInterval counts milliseconds or microframes. If the kernel will not say either, UAC 2.0
+        // implies high speed and UAC 1.0 almost always means full speed.
+        val highSpeed = if (speed > 0) {
+            speed >= UsbIsoNative.SPEED_HIGH
+        } else {
+            alternate.spec == mmm.usb.UsbAudioSpec.UAC2
+        }
+        return UsbIsoStreamer(open.fileDescriptor, alternate, sampleRate, highSpeed, clockedProducer)
+            .also { streamer = it }
+    }
+
     /** Parks the interfaces back on their zero-bandwidth setting and hands the device back. */
     public fun release() {
+        // Transfers first: the URBs must be back from the kernel before the interface they target
+        // is switched to zero bandwidth.
+        streamer?.stop()
+        streamer = null
+
         val open = connection ?: return
         val device = parkedDevice
 

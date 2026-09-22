@@ -16,15 +16,15 @@ import mmm.dsp.AudioBuffer
  * small rather than comfortable.
  */
 public class AudioOutput(
-    public val sampleRate: Int,
-    public val channels: Int,
+    override val sampleRate: Int,
+    override val channels: Int,
     public val route: OutputRoute = OutputRoute.MEDIA,
     /**
      * Requested buffer length. Rounded up to the device minimum; 2048 frames is about 42 ms at
      * 48 kHz, which keeps Bluetooth usable without under-running on mid-range hardware.
      */
     requestedBufferFrames: Int = 2048,
-) {
+) : AudioSink {
     private val channelMask = when (channels) {
         1 -> AndroidAudioFormat.CHANNEL_OUT_MONO
         2 -> AndroidAudioFormat.CHANNEL_OUT_STEREO
@@ -41,7 +41,7 @@ public class AudioOutput(
         maxOf(minBufferBytes, requestedBufferFrames * 4 * channels)
 
     /** Frames of latency this output adds, for the latency readout on the live screen. */
-    public val bufferFrames: Int = bufferSizeBytes / (4 * channels)
+    override val bufferFrames: Int = bufferSizeBytes / (4 * channels)
 
     private val track: AudioTrack = AudioTrack.Builder()
         .setAudioAttributes(
@@ -85,11 +85,11 @@ public class AudioOutput(
         return null
     }
 
-    public fun start() {
+    override fun start() {
         if (track.playState != AudioTrack.PLAYSTATE_PLAYING) track.play()
     }
 
-    public fun pause() {
+    override fun pause() {
         if (track.playState == AudioTrack.PLAYSTATE_PLAYING) track.pause()
     }
 
@@ -99,7 +99,7 @@ public class AudioOutput(
     }
 
     /** Blocking write. @return frames actually written, or a negative `AudioTrack` error code. */
-    public fun write(buffer: AudioBuffer): Int {
+    override fun write(buffer: AudioBuffer): Int {
         val samples = buffer.frames * channels
         val target = if (samples <= interleaved.size) interleaved else FloatArray(samples)
         buffer.writeInterleaved(target)
@@ -111,7 +111,7 @@ public class AudioOutput(
         track.setVolume(volume.coerceIn(0f, 1f))
     }
 
-    public fun release() {
+    override fun release() {
         runCatching { track.stop() }
         track.release()
     }
