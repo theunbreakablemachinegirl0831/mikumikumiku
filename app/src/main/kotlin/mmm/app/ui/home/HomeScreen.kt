@@ -42,6 +42,7 @@ fun HomeScreen(
     onOpenFamily: (ExerciseFamily) -> Unit,
     onOpenProgress: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenLive: () -> Unit,
 ) {
     val progress by app.progress.progress.collectAsStateWithLifecycle()
     val settings by app.settings.settings.collectAsStateWithLifecycle()
@@ -89,7 +90,7 @@ fun HomeScreen(
                 )
             }
 
-            LiveModeCard()
+            LiveModeCard(onClick = onOpenLive)
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = onOpenProgress) { Text("진행도") }
@@ -155,21 +156,18 @@ private fun FamilyCard(family: ExerciseFamily, progress: FamilyProgress, onClick
     }
 }
 
-/**
- * Where live capture will go once the USB output path can play sound. Shown now, disabled, so it
- * is clear the mode exists and is not forgotten - rather than appearing out of nowhere later.
- */
+/** The way into live mode, which needs a USB DAC and its own setup steps. */
 @Composable
-private fun LiveModeCard() {
+private fun LiveModeCard(onClick: () -> Unit) {
     Card(
+        onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
     ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text("실시간 모드 (준비 중)", style = MaterialTheme.typography.titleMedium)
+            Text("실시간 모드 (USB DAC)", style = MaterialTheme.typography.titleMedium)
             Text(
-                "Spotify 등에서 재생 중인 음악으로 훈련한다. USB DAC 배타 점유는 확인되었고, " +
-                    "DAC으로 소리를 보내는 네이티브 출력이 남았다.",
+                "Spotify 등에서 재생 중인 음악으로 훈련한다. USB DAC을 점유해 그쪽으로만 처리된 소리를 보낸다.",
                 style = MaterialTheme.typography.bodySmall,
             )
         }

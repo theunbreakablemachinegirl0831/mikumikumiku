@@ -40,10 +40,10 @@ import mmm.training.Question
 import mmm.training.TrialResult
 
 @Composable
-fun ExerciseScreen(app: MmmApplication, family: ExerciseFamily, onBack: () -> Unit) {
+fun ExerciseScreen(app: MmmApplication, family: ExerciseFamily, live: Boolean, onBack: () -> Unit) {
     val vm: ExerciseViewModel = viewModel(
-        key = "exercise-${family.id}",
-        factory = ExerciseViewModel.factory(app, family),
+        key = "exercise-${family.id}-${if (live) "live" else "file"}",
+        factory = ExerciseViewModel.factory(app, family, live),
     )
     val state by vm.ui.collectAsStateWithLifecycle()
 
@@ -94,7 +94,7 @@ private fun QuestionContent(state: ExerciseUiState, question: Question, vm: Exer
     }
     Text(question.prompt, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
 
-    StimulusRow(question, state.playingId, vm)
+    StimulusRow(question, state.playingId, state.live, vm)
     ChoiceGrid(question, state, vm)
 
     val result = state.result
@@ -121,7 +121,7 @@ private fun QuestionContent(state: ExerciseUiState, question: Question, vm: Exer
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun StimulusRow(question: Question, playingId: String?, vm: ExerciseViewModel) {
+private fun StimulusRow(question: Question, playingId: String?, live: Boolean, vm: ExerciseViewModel) {
     Card {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("듣기", style = MaterialTheme.typography.titleSmall)
@@ -140,11 +140,15 @@ private fun StimulusRow(question: Question, playingId: String?, vm: ExerciseView
                     }
                 }
                 if (playingId != null) {
-                    TextButton(onClick = vm::stopPlayback) { Text("■ 정지") }
+                    TextButton(onClick = vm::stopPlayback) { Text(if (live) "■ 원음으로" else "■ 정지") }
                 }
             }
             Text(
-                "재생 중에 다른 버튼을 누르면 같은 위치에서 바로 바뀐다. 같은 마디끼리 비교하면 된다.",
+                if (live) {
+                    "지금 흐르는 음악에 바로 걸린다. 아무것도 누르지 않은 상태가 원음이다."
+                } else {
+                    "재생 중에 다른 버튼을 누르면 같은 위치에서 바로 바뀐다. 같은 마디끼리 비교하면 된다."
+                },
                 style = MaterialTheme.typography.bodySmall,
             )
         }

@@ -6,16 +6,11 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import mmm.app.MmmApplication
-import mmm.app.playback.StimulusPlayer
-import mmm.app.source.LoadedSource
-import mmm.app.source.StimulusSource
 import mmm.training.AnswerDraft
 import mmm.training.Curriculum
 import mmm.training.ExerciseFamily
@@ -24,11 +19,12 @@ import mmm.training.Question
 import mmm.training.SessionStats
 import mmm.training.TrainingSession
 import mmm.training.TrialResult
-import mmm.training.render.StimulusRenderer
 import kotlin.random.Random
 
 data class ExerciseUiState(
     val family: ExerciseFamily,
+    /** Playing to live music rather than a rendered excerpt; changes what "stop" means. */
+    val live: Boolean = false,
     /** Non-null while something is being prepared, with what to tell the learner. */
     val busy: String? = "음원을 준비하는 중",
     val error: String? = null,
@@ -51,25 +47,29 @@ data class ExerciseUiState(
 )
 
 /**
- * Runs one family's practice: question, render, listen, answer, grade, repeat.
+ * Runs one family's practice: question, prepare, listen, answer, grade, repeat.
  *
- * Rendering happens off the main thread because it is real work - every stimulus is filtered and
- * then loudness-measured twice - and a question is only shown once all of its stimuli are ready,
- * so the learner can never press a button whose audio does not exist yet.
+ * Preparing happens off the main thread because in the file mode it is real work - every stimulus
+ * is filtered and then loudness-measured twice - and a question is only shown once all of its
+ * stimuli are ready, so the learner can never press a button whose audio does not exist yet.
+ *
+ * @param live play stimuli as processing on the live capture instead of rendered clips
  */
 class ExerciseViewModel(
     private val app: MmmApplication,
     private val family: ExerciseFamily,
+    private val live: Boolean,
 ) : ViewModel() {
 
-    private val _ui = MutableStateFlow(ExerciseUiState(family = family))
+    private val _ui = MutableStateFlow(
+        ExerciseUiState(family = family, live = live, busy = if (live) "실시간 연결을 확인하는 중" else "음원을 준비하는 중")
+    )
     val ui: StateFlow<ExerciseUiState> = _ui.asStateFlow()
 
-    private val player = StimulusPlayer()
+    private var backend: StimulusBackend? = null
     private var session: TrainingSession? = null
-    private var source: LoadedSource? = null
     private var draft: AnswerDraft? = null
-    private var loudnessMatched = true
+    private var playingId: String? = null
 
     private var questionShownAt = 0L
     private var playCount = 0
@@ -81,15 +81,13 @@ class ExerciseViewModel(
     private suspend fun start() {
         try {
             val settings = app.settings.current()
-            loudnessMatched = settings.loudnessMatched
 
             // Starting from a stale level would put the learner back on a rung they already left.
             app.progress.awaitLoaded()
 
-            val loaded = withContext(Dispatchers.IO) {
-                StimulusSource.load(app, settings.source, settings.excerptSeconds)
-            }
-            source = loaded
+            val opened = if (live) LiveBackend(app.live, settings.loudnessMatched) else FileBackend(app, settings)
+            opened.open()
+            backend = opened
             val overrides = if (family in FilterOverrides.APPLIES_TO) {
                 settings.filterOverrides()
             } else {
@@ -102,33 +100,41 @@ class ExerciseViewModel(
                 overrides = overrides,
             )
             _ui.value = _ui.value.copy(
-                sourceLabel = loaded.label,
+                sourceLabel = opened.sourceLabel,
                 error = null,
                 filterNote = describe(overrides),
             )
             nextQuestion()
         } catch (e: Exception) {
+            val reason = e.message ?: e::class.simpleName
             _ui.value = _ui.value.copy(
                 busy = null,
-                error = "음원을 불러오지 못했다: ${e.message ?: e::class.simpleName}. " +
-                    "홈에서 핑크 노이즈를 고르거나 다른 파일을 선택한다.",
+                error = if (live) {
+                    "실시간 과제를 시작하지 못했다: $reason"
+                } else {
+                    "음원을 불러오지 못했다: $reason. 홈에서 핑크 노이즈를 고르거나 다른 파일을 선택한다."
+                },
             )
         }
     }
 
     /** Plays [stimulusId], or stops if it is already the one playing. */
     fun toggleStimulus(stimulusId: String) {
-        if (player.playingId == stimulusId) {
-            player.stop()
+        val current = backend ?: return
+        if (playingId == stimulusId) {
+            current.stop()
+            playingId = null
         } else {
-            player.play(stimulusId)
+            current.play(stimulusId)
+            playingId = stimulusId
             playCount++
         }
-        _ui.value = _ui.value.copy(playingId = player.playingId)
+        _ui.value = _ui.value.copy(playingId = playingId)
     }
 
     fun stopPlayback() {
-        player.stop()
+        backend?.stop()
+        playingId = null
         _ui.value = _ui.value.copy(playingId = null)
     }
 
@@ -167,15 +173,13 @@ class ExerciseViewModel(
 
     private suspend fun nextQuestion() {
         val running = session ?: return
-        val clip = source ?: return
-        player.stop()
+        val current = backend ?: return
+        current.stop()
+        playingId = null
         _ui.value = _ui.value.copy(busy = "문제를 만드는 중", result = null, playingId = null)
 
         val question = running.next()
-        val rendered = withContext(Dispatchers.Default) {
-            StimulusRenderer.render(question, clip.audio, clip.sampleRate, loudnessMatched)
-        }
-        player.load(rendered)
+        current.prepare(question)
 
         val newDraft = AnswerDraft(question)
         draft = newDraft
@@ -217,14 +221,14 @@ class ExerciseViewModel(
     fun rankOf(choiceId: String): Int? = draft?.rankOf(choiceId)
 
     override fun onCleared() {
-        player.release()
+        backend?.release()
         super.onCleared()
     }
 
     companion object {
-        fun factory(app: MmmApplication, family: ExerciseFamily): ViewModelProvider.Factory =
+        fun factory(app: MmmApplication, family: ExerciseFamily, live: Boolean): ViewModelProvider.Factory =
             viewModelFactory {
-                initializer { ExerciseViewModel(app, family) }
+                initializer { ExerciseViewModel(app, family, live) }
             }
     }
 }
