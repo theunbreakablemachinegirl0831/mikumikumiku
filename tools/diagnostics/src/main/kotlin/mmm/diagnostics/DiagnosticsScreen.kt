@@ -32,6 +32,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import mmm.audio.OutputRoute
 import mmm.source.capture.CaptureState
 import mmm.source.capture.CaptureVerdict
+import mmm.source.usb.AcousticResult
 
 @Composable
 public fun DiagnosticsScreen(
@@ -187,8 +188,9 @@ private fun UsbCard(state: DiagnosticsUiState, viewModel: DiagnosticsViewModel) 
             usb.claim?.let { claim ->
                 Text(
                     when {
-                        claim.exclusive -> "성립: Android 재생이 USB를 떠났다. 이제 DAC은 우리 것이다."
-                        claim.claimed -> "부분 성공: 인터페이스는 잡았지만 Android가 아직 USB로 재생한다."
+                        usb.holdingExclusively -> "성립: Android가 DAC을 놓았다. 이제 DAC은 우리 것이다."
+                        usb.acoustic != null -> "아직이다: ${usb.acoustic.label}"
+                        claim.claimed -> "인터페이스 점유됨 - 아래에서 실제로 들리는 곳을 골라야 판정된다."
                         else -> "실패: 인터페이스를 점유하지 못했다."
                     },
                     style = MaterialTheme.typography.bodyMedium,
@@ -203,7 +205,29 @@ private fun UsbCard(state: DiagnosticsUiState, viewModel: DiagnosticsViewModel) 
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
-                if (claim.claimed && claim.routedToUsb) {
+                if (claim.claimed) {
+                    // The routing probe has already been wrong here once, reporting USB while
+                    // every sound was coming out of the speaker. The listener is the instrument
+                    // that settles it, so the app asks instead of insisting.
+                    Text(
+                        "지금 소리가 어디서 나냥? (아무거나 재생해보고 고른다)",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        AcousticResult.entries.forEach { option ->
+                            FilterChip(
+                                selected = usb.acoustic == option,
+                                onClick = { viewModel.recordAcoustic(option) },
+                                label = { Text(option.label, style = MaterialTheme.typography.labelSmall) },
+                            )
+                        }
+                    }
+                    usb.acoustic?.let {
+                        Text(it.meaning, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+                    }
+                }
+                if (claim.claimed && claim.routedToUsb && usb.acoustic == null) {
                     // Claiming evicts the kernel driver from the interface, but it does not stop
                     // the platform's audio policy from having already opened the card and going on
                     // using it. Android exposes a switch for exactly this, and it is the step

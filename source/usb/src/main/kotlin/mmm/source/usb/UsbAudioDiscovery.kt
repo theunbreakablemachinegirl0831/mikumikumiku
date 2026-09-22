@@ -82,7 +82,7 @@ public class UsbAudioDiscovery(context: Context) {
      * settles an exclusive claim: once the platform has lost the DAC it routes to the built-in
      * speaker instead, whatever its device list still says.
      */
-    public fun probeRoutedOutput(): AudioDeviceInfo? {
+    public fun probeRoutedOutput(settleMs: Long = 600): AudioDeviceInfo? {
         val format = android.media.AudioFormat.Builder()
             .setEncoding(android.media.AudioFormat.ENCODING_PCM_16BIT)
             .setSampleRate(48000)
@@ -106,11 +106,20 @@ public class UsbAudioDiscovery(context: Context) {
         }.getOrNull() ?: return null
 
         return try {
-            // Routing is only resolved once the track is actually running, so it gets a buffer of
-            // silence rather than just being started and asked.
+            // Reading the route straight after the first write returns the device the policy
+            // assigned at track creation, which is stale whenever the route is in the middle of
+            // changing - and that is exactly the moment we care about. Claiming a DAC removes its
+            // sound card, and the fallback to the speaker takes a moment to propagate, so this
+            // keeps feeding silence and re-reading until the answer stops moving.
             track.play()
-            track.write(ShortArray(minBytes / 2), 0, minBytes / 2)
-            track.routedDevice
+            val silence = ShortArray(minBytes / 2)
+            val deadline = System.currentTimeMillis() + settleMs
+            var routed: AudioDeviceInfo? = null
+            while (System.currentTimeMillis() < deadline) {
+                track.write(silence, 0, silence.size)
+                routed = track.routedDevice ?: routed
+            }
+            routed
         } catch (e: Exception) {
             null
         } finally {

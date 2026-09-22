@@ -12,13 +12,13 @@ android {
         applicationId = "mmm.diagnostics"
         minSdk = 29
         targetSdk = 35
-        versionCode = 4
-        versionName = "0.4"
+        versionCode = 5
+        versionName = "0.5"
 
         // The version goes in the launcher label as well as on screen. Builds reach the phone as
         // CI artifacts rather than through a store, so "which one is installed" is otherwise a
         // guess - and a stale build has already cost us one round of wrong conclusions.
-        resValue("string", "app_name", "청음 진단 v0.4")
+        resValue("string", "app_name", "청음 진단 v0.5")
 
         // CI sets this to the short commit; a local build says so instead of pretending.
         buildConfigField(

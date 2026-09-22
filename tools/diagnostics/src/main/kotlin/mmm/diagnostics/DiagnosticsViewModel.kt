@@ -21,6 +21,7 @@ import mmm.source.capture.CaptureVerdict
 import mmm.source.capture.PlayingAppsMonitor
 import mmm.source.capture.PlayingStream
 import mmm.source.capture.VolumeSeparation
+import mmm.source.usb.AcousticResult
 import mmm.source.usb.UsbAudioController
 import mmm.source.usb.UsbAudioReport
 
@@ -243,6 +244,11 @@ public class DiagnosticsViewModel(application: Application) : AndroidViewModel(a
      */
     public fun claimUsbExclusively() {
         usb.claimExclusively()
+    }
+
+    /** Records what the listener heard; this outranks the platform's routing report. */
+    public fun recordAcoustic(result: AcousticResult) {
+        usb.recordAcoustic(result)
     }
 
     public fun releaseUsbClaim() {
