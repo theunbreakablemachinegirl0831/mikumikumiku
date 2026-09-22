@@ -114,6 +114,7 @@ public class UsbIsoStreamer internal constructor(
     )
 
     /** @return false with [UsbStreamStats.error] set if the stream could not be set up */
+    @Synchronized
     public fun start(): Boolean {
         if (running) return true
         handle = UsbIsoNative.nativeOpen(fd, alternate.endpointAddress, URB_COUNT, packetsPerUrb, maxPacketBytes)
@@ -138,6 +139,8 @@ public class UsbIsoStreamer internal constructor(
         return true
     }
 
+    /** Safe to call more than once and from more than one thread (the capture service and the UI both do). */
+    @Synchronized
     public fun stop() {
         running = false
         val feeder = worker
@@ -229,7 +232,7 @@ public class UsbIsoStreamer internal constructor(
         val name = runCatching { OsConstants.errnoName(errno) }.getOrNull() ?: "errno $errno"
         val text = runCatching { Os.strerror(errno) }.getOrNull() ?: ""
         val hint = when (errno) {
-            OsConstants.ENODEV, OsConstants.ESHUTDOWN -> " - DAC이 분리되었다"
+            OsConstants.ENODEV, ESHUTDOWN -> " - DAC이 분리되었다"
             OsConstants.EINVAL, OsConstants.EMSGSIZE -> " - 패킷 크기나 엔드포인트가 맞지 않는다"
             OsConstants.EXDEV -> " - 전송 일정이 밀렸다"
             else -> ""
@@ -255,5 +258,8 @@ public class UsbIsoStreamer internal constructor(
         const val DEADBAND_FRAMES = 96
 
         const val PULL_PRIME_FRAMES = 1024
+
+        /** Linux ESHUTDOWN, which usbfs returns for a device gone mid-transfer; OsConstants lacks it. */
+        const val ESHUTDOWN = 108
     }
 }
