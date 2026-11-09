@@ -12,6 +12,7 @@ import mmm.app.ui.earphone.EarphoneSearchScreen
 import mmm.app.ui.earphone.EarphonesScreen
 import mmm.app.ui.exercise.ExerciseScreen
 import mmm.app.ui.home.HomeScreen
+import mmm.app.ui.player.PlayerScreen
 import mmm.app.ui.live.LiveScreen
 import mmm.app.ui.progress.ProgressScreen
 import mmm.app.ui.settings.SettingsScreen
@@ -27,6 +28,7 @@ private object Routes {
     const val EARPHONE = "earphone/{id}"
     const val EARPHONE_SEARCH = "earphone-search"
     const val AUDIOMETRY = "audiometry"
+    const val PLAYER = "player"
 
     fun earphone(id: String) = "earphone/$id"
 
@@ -47,7 +49,11 @@ fun MmmApp(app: MmmApplication) {
                 onOpenLive = { nav.navigate(Routes.LIVE) },
                 onOpenEarphones = { nav.navigate(Routes.EARPHONES) },
                 onOpenAudiometry = { nav.navigate(Routes.AUDIOMETRY) },
+                onOpenPlayer = { nav.navigate(Routes.PLAYER) },
             )
+        }
+        composable(Routes.PLAYER) {
+            PlayerScreen(app = app, onBack = { nav.popBackStack() })
         }
         composable(Routes.AUDIOMETRY) {
             AudiometryScreen(app = app, onBack = { nav.popBackStack() })

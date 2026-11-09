@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
@@ -46,6 +47,7 @@ fun HomeScreen(
     onOpenLive: () -> Unit,
     onOpenEarphones: () -> Unit,
     onOpenAudiometry: () -> Unit,
+    onOpenPlayer: () -> Unit,
 ) {
     val progress by app.progress.progress.collectAsStateWithLifecycle()
     val settings by app.settings.settings.collectAsStateWithLifecycle()
@@ -87,6 +89,10 @@ fun HomeScreen(
                         else -> "이어폰: ${activeEarphone.name} · EQ 켜짐"
                     }
                 )
+            }
+
+            Button(onClick = onOpenPlayer, modifier = Modifier.fillMaxWidth()) {
+                Text("플레이어 (이어폰 EQ · 스펙트럼)")
             }
 
             SourceCard(

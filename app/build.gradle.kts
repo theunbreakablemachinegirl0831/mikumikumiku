@@ -7,8 +7,8 @@ plugins {
 // One place for the version, because it appears in two: the launcher label and the screen header.
 // Builds reach the phone as CI artifacts rather than through a store, so which one is installed is
 // otherwise a guess.
-val appVersionName = "0.4"
-val appVersionCode = 4
+val appVersionName = "0.5"
+val appVersionCode = 5
 
 android {
     namespace = "mmm.app"
@@ -56,6 +56,10 @@ dependencies {
     implementation(project(":source:capture"))
     implementation(project(":source:usb"))
     implementation(project(":core:eq"))
+
+    implementation(libs.media3.exoplayer)
+    implementation(libs.media3.session)
+    implementation(libs.media3.common)
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
