@@ -100,14 +100,15 @@ fun PlayerScreen(app: MmmApplication, onBack: () -> Unit) {
                 }
             }
             TabRow(selectedTabIndex = tab) {
-                listOf("재생 중", "곡", "재생목록").forEachIndexed { index, label ->
+                listOf("재생 중", "곡", "재생목록", "Spotify").forEachIndexed { index, label ->
                     Tab(selected = tab == index, onClick = { tab = index }, text = { Text(label) })
                 }
             }
             when (tab) {
                 0 -> NowPlaying(app, ui, vm)
                 1 -> Songs(ui, vm, onAsk = { askAudio.launch(audioPermission) })
-                else -> Playlists(ui, vm)
+                2 -> Playlists(ui, vm)
+                else -> SpotifyTab(app)
             }
         }
     }

@@ -12,6 +12,7 @@
         android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
@@ -38,6 +39,17 @@
             <intent-filter>
                 <action android:name="androidx.media3.session.MediaSessionService" />
             </intent-filter>
+        </service>
+
+        <!-- Applies the earphone EQ to other apps' announced audio sessions (Spotify). It plays
+             nothing itself, so none of the media service types fit. -->
+        <service
+            android:name=".sessioneq.SessionEqService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Applies the user's headphone equaliser to audio sessions other music apps announce" />
         </service>
     </application>
 </manifest>

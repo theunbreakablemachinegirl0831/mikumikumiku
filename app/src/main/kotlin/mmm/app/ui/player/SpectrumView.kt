@@ -21,7 +21,9 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
+import android.media.audiofx.Visualizer
 import mmm.app.player.SpectrumTap
+import mmm.app.sessioneq.SessionEqService
 import mmm.dsp.Fft
 import mmm.dsp.Window
 import mmm.eq.EqProfile
@@ -39,9 +41,54 @@ import kotlin.math.pow
  * fall at a fixed rate, the way analyser displays have always behaved - instant attack is what
  * makes transients visible, and a slow fall is what makes the display readable.
  */
+/** Where the spectrum display gets its audio: [size] mono samples of what is playing now. */
+interface SpectrumSource {
+    val sampleRate: Int
+    val size: Int
+    fun read(target: FloatArray): Boolean
+}
+
+/** The player's own output, after the EQ. */
+object PlayerSpectrumSource : SpectrumSource {
+    override val sampleRate: Int get() = SpectrumTap.sampleRate
+    override val size: Int = 4096
+    override fun read(target: FloatArray): Boolean = SpectrumTap.latest(target)
+}
+
+/**
+ * Another app's audio, through the Visualizer attached to its session. Visualizer hands out 8-bit
+ * samples, so the floor of this display sits around -48 dB; the shape above it is what counts.
+ */
+object VisualizerSpectrumSource : SpectrumSource {
+    private var bytes = ByteArray(0)
+
+    override val sampleRate: Int
+        get() = SessionEqService.latestVisualizer?.let { runCatching { it.samplingRate / 1000 }.getOrNull() } ?: 48000
+
+    override val size: Int = 1024
+
+    override fun read(target: FloatArray): Boolean {
+        val visualizer = SessionEqService.latestVisualizer ?: return false
+        return runCatching {
+            val capture = visualizer.captureSize
+            if (bytes.size != capture) bytes = ByteArray(capture)
+            if (visualizer.getWaveForm(bytes) != Visualizer.SUCCESS) return false
+            val n = minOf(capture, target.size)
+            for (i in 0 until n) target[i] = ((bytes[i].toInt() and 0xFF) - 128) / 128f
+            for (i in n until target.size) target[i] = 0f
+            true
+        }.getOrDefault(false)
+    }
+}
+
 @Composable
-fun SpectrumView(playing: Boolean, eq: EqProfile?, modifier: Modifier = Modifier) {
-    val analyzer = remember { SpectrumAnalyzer() }
+fun SpectrumView(
+    playing: Boolean,
+    eq: EqProfile?,
+    modifier: Modifier = Modifier,
+    source: SpectrumSource = PlayerSpectrumSource,
+) {
+    val analyzer = remember(source) { SpectrumAnalyzer(source) }
     var frame by remember { mutableLongStateOf(0L) }
 
     LaunchedEffect(playing) {
@@ -116,8 +163,8 @@ private val LOG_MAX = ln(20000.0)
 /** Horizontal position of [frequency] on the log axis, 0..1. */
 private fun xOf(frequency: Double): Double = (ln(frequency) - LOG_MIN) / (LOG_MAX - LOG_MIN)
 
-private class SpectrumAnalyzer {
-    private val size = 4096
+private class SpectrumAnalyzer(private val source: SpectrumSource) {
+    private val size = source.size
     private val fft = Fft(size)
     private val window = Window.hann(size)
     private val samples = FloatArray(size)
@@ -129,8 +176,8 @@ private class SpectrumAnalyzer {
     private val peakHold = DoubleArray(BARS)
 
     fun update(playing: Boolean, dt: Double) {
-        val fresh = playing && SpectrumTap.latest(samples)
-        val rate = SpectrumTap.sampleRate
+        val fresh = playing && source.read(samples)
+        val rate = source.sampleRate
         val target = DoubleArray(BARS) { BOTTOM_DB }
         if (fresh) {
             for (i in 0 until size) {
