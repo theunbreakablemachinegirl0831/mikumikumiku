@@ -18,6 +18,7 @@ import mmm.app.data.EarphoneRepository
 import mmm.eq.EqProfile
 import mmm.app.data.SettingsRepository
 import mmm.app.live.LiveSession
+import mmm.app.player.PlayerConnection
 
 private val Context.trainerDataStore: DataStore<Preferences> by preferencesDataStore(name = "trainer")
 
@@ -43,6 +44,9 @@ class MmmApplication : Application() {
     val earphones: EarphoneRepository by lazy { EarphoneRepository(applicationContext, appScope) }
 
     val audiograms: AudiogramStore by lazy { AudiogramStore(applicationContext) }
+
+    /** The one connection to the music player, shared by the player screen and the mini player. */
+    val player: PlayerConnection by lazy { PlayerConnection(this, appScope).also { it.connect() } }
 
     /**
      * The EQ every playback path applies: the active earphone's, when EQ is on and one has been

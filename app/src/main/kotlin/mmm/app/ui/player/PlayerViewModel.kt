@@ -1,49 +1,34 @@
 package mmm.app.ui.player
 
-import android.content.ComponentName
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
-import androidx.media3.common.MediaItem
-import androidx.media3.common.PlaybackException
-import androidx.media3.common.Player
-import androidx.media3.session.MediaController
-import androidx.media3.session.SessionToken
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import mmm.app.MmmApplication
 import mmm.app.player.MusicLibrary
-import mmm.app.player.PlaybackService
 import mmm.app.player.Playlist
 import mmm.app.player.Track
 import java.util.Locale
 
-data class PlayerUiState(
-    val connected: Boolean = false,
+/** An album as the library shows it: tracks grouped by album and album artist. */
+data class Album(val title: String, val artist: String, val tracks: List<Track>) {
+    val key: String get() = "$title\u0000$artist"
+}
+
+data class LibraryUiState(
     val permissionGranted: Boolean = false,
     val loading: Boolean = false,
     val tracks: List<Track> = emptyList(),
+    val albums: List<Album> = emptyList(),
     val query: String = "",
     val playlists: List<Playlist> = emptyList(),
     val openPlaylist: String? = null,
-    val isPlaying: Boolean = false,
-    val title: String? = null,
-    val artist: String? = null,
-    val positionMs: Long = 0,
-    val durationMs: Long = 0,
-    val shuffle: Boolean = false,
-    val repeatMode: Int = Player.REPEAT_MODE_OFF,
-    val queue: List<String> = emptyList(),
-    val queueIndex: Int = -1,
-    /** Why the last thing asked of the player did not happen, in words the listener can act on. */
-    val error: String? = null,
+    val openAlbum: String? = null,
 ) {
     val filtered: List<Track>
         get() {
@@ -57,40 +42,18 @@ data class PlayerUiState(
 }
 
 /**
- * The player screen's side of the music: a MediaController talking to [PlaybackService], the
- * phone's music library and the playlists. The service owns playback, so the music outlives this
- * screen; the controller is only how the screen sees and steers it.
+ * The library half of the player: the phone's music and the playlists. Playback itself is the
+ * app-wide [mmm.app.player.PlayerConnection], so the mini player and this screen see one state.
  */
 class PlayerViewModel(private val app: MmmApplication) : ViewModel() {
 
     private val library = MusicLibrary(app)
-    private var controller: MediaController? = null
 
-    private val _ui = MutableStateFlow(PlayerUiState())
-    val ui: StateFlow<PlayerUiState> = _ui.asStateFlow()
-
-    private val listener = object : Player.Listener {
-        override fun onEvents(player: Player, events: Player.Events) = publish(player)
-
-        override fun onPlayerError(error: PlaybackException) {
-            _ui.value = _ui.value.copy(error = "재생 오류: ${error.errorCodeName} - ${error.message ?: ""}")
-        }
-    }
-
-    private var connecting = false
+    private val _ui = MutableStateFlow(LibraryUiState())
+    val ui: StateFlow<LibraryUiState> = _ui.asStateFlow()
 
     init {
-        connect()
-
-        viewModelScope.launch {
-            // Position is not an event; it is polled while the screen is up.
-            while (isActive) {
-                controller?.let { c ->
-                    _ui.value = _ui.value.copy(positionMs = c.currentPosition.coerceAtLeast(0), durationMs = c.duration.coerceAtLeast(0))
-                }
-                delay(500)
-            }
-        }
+        app.player.connect()
         viewModelScope.launch { _ui.value = _ui.value.copy(playlists = library.playlists()) }
     }
 
@@ -100,7 +63,10 @@ class PlayerViewModel(private val app: MmmApplication) : ViewModel() {
             viewModelScope.launch {
                 _ui.value = _ui.value.copy(loading = true)
                 val tracks = runCatching { library.tracks() }.getOrDefault(emptyList())
-                _ui.value = _ui.value.copy(loading = false, tracks = tracks)
+                val albums = tracks.groupBy { it.album to it.artist }
+                    .map { (key, list) -> Album(key.first.ifBlank { "알 수 없는 앨범" }, key.second, list) }
+                    .sortedBy { it.title.lowercase(Locale.ROOT) }
+                _ui.value = _ui.value.copy(loading = false, tracks = tracks, albums = albums)
             }
         }
     }
@@ -109,72 +75,7 @@ class PlayerViewModel(private val app: MmmApplication) : ViewModel() {
         _ui.value = _ui.value.copy(query = query)
     }
 
-    /** Connects to the playback service; a failure is shown rather than swallowed. */
-    fun connect() {
-        if (controller != null || connecting) return
-        connecting = true
-        val token = SessionToken(app, ComponentName(app, PlaybackService::class.java))
-        val future = MediaController.Builder(app, token).buildAsync()
-        future.addListener({
-            connecting = false
-            runCatching { future.get() }
-                .onSuccess { built ->
-                    controller = built
-                    built.addListener(listener)
-                    publish(built)
-                    _ui.value = _ui.value.copy(connected = true, error = null)
-                }
-                .onFailure { e ->
-                    val cause = (e as? java.util.concurrent.ExecutionException)?.cause ?: e
-                    _ui.value = _ui.value.copy(
-                        connected = false,
-                        error = "재생 서비스에 연결하지 못했다: ${cause.message ?: cause::class.simpleName}",
-                    )
-                }
-        }, ContextCompat.getMainExecutor(app))
-    }
-
-    /** Plays [list] as the queue, starting from [start]. */
-    fun play(list: List<Track>, start: Int) {
-        if (list.isEmpty()) return
-        val c = controller
-        if (c == null) {
-            _ui.value = _ui.value.copy(error = "재생 서비스에 아직 연결되지 않았다. 다시 연결하는 중이다.")
-            connect()
-            return
-        }
-        _ui.value = _ui.value.copy(error = null)
-        c.setMediaItems(list.map(Track::toMediaItem), start.coerceIn(list.indices), 0L)
-        c.prepare()
-        c.play()
-    }
-
-    fun toggle() {
-        val c = controller ?: return
-        if (c.isPlaying) c.pause() else c.play()
-    }
-
-    fun next() = controller?.seekToNextMediaItem()
-
-    fun previous() = controller?.seekToPrevious()
-
-    fun seekTo(ms: Long) = controller?.seekTo(ms)
-
-    fun skipTo(index: Int) = controller?.seekTo(index, 0L)
-
-    fun toggleShuffle() {
-        controller?.let { it.shuffleModeEnabled = !it.shuffleModeEnabled }
-    }
-
-    fun cycleRepeat() {
-        controller?.let {
-            it.repeatMode = when (it.repeatMode) {
-                Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
-                Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
-                else -> Player.REPEAT_MODE_OFF
-            }
-        }
-    }
+    fun play(list: List<Track>, start: Int) = app.player.play(list, start)
 
     fun createPlaylist(name: String) = editPlaylists { it + Playlist(name, emptyList()) }
 
@@ -192,6 +93,10 @@ class PlayerViewModel(private val app: MmmApplication) : ViewModel() {
         _ui.value = _ui.value.copy(openPlaylist = name)
     }
 
+    fun openAlbum(key: String?) {
+        _ui.value = _ui.value.copy(openAlbum = key)
+    }
+
     fun tracksOf(playlist: Playlist): List<Track> {
         val byId = _ui.value.tracks.associateBy { it.id }
         return playlist.trackIds.mapNotNull { byId[it] }
@@ -201,30 +106,6 @@ class PlayerViewModel(private val app: MmmApplication) : ViewModel() {
         val updated = change(_ui.value.playlists)
         _ui.value = _ui.value.copy(playlists = updated)
         viewModelScope.launch { library.savePlaylists(updated) }
-    }
-
-    private fun publish(player: Player) {
-        val metadata = player.mediaMetadata
-        val queue = (0 until player.mediaItemCount).map { index ->
-            val item: MediaItem = player.getMediaItemAt(index)
-            item.mediaMetadata.title?.toString() ?: "제목 없음"
-        }
-        _ui.value = _ui.value.copy(
-            isPlaying = player.isPlaying,
-            title = metadata.title?.toString(),
-            artist = metadata.artist?.toString(),
-            shuffle = player.shuffleModeEnabled,
-            repeatMode = player.repeatMode,
-            queue = queue,
-            queueIndex = player.currentMediaItemIndex,
-            durationMs = player.duration.coerceAtLeast(0),
-        )
-    }
-
-    override fun onCleared() {
-        controller?.removeListener(listener)
-        controller?.release()
-        super.onCleared()
     }
 
     companion object {

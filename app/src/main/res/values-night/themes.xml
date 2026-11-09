@@ -1,6 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!--
+      Compose draws everything, on its own dark glass backdrop, so the window is always the dark
+      platform theme: a light window would flash white before the first frame. The platform has no
+      DayNight.NoActionBar - the diagnostics build found that out the hard way.
+    -->
     <style name="Theme.MmmTrainer" parent="@android:style/Theme.DeviceDefault.NoActionBar">
-        <item name="android:windowBackground">?android:attr/colorBackground</item>
+        <item name="android:windowBackground">@android:color/black</item>
     </style>
 </resources>

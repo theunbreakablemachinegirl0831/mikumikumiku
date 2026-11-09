@@ -1,5 +1,12 @@
 package mmm.app.ui.exercise
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -12,7 +19,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
+import mmm.app.ui.theme.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
@@ -114,9 +121,17 @@ private fun QuestionContent(state: ExerciseUiState, question: Question, vm: Exer
                 style = MaterialTheme.typography.bodySmall,
             )
         }
-    } else {
-        ResultCard(question, result)
-        Button(onClick = vm::next, modifier = Modifier.fillMaxWidth()) { Text("다음 문제") }
+    }
+    // The verdict rises in rather than snapping into place: it is the moment the trial is about.
+    AnimatedVisibility(
+        visible = result != null,
+        enter = fadeIn(tween(260)) + expandVertically(tween(320)) + scaleIn(tween(320), initialScale = 0.96f),
+        exit = fadeOut(tween(120)) + shrinkVertically(tween(200)),
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            result?.let { ResultCard(question, it) }
+            Button(onClick = vm::next, modifier = Modifier.fillMaxWidth()) { Text("다음 문제") }
+        }
     }
 
     SessionLine(state)

@@ -12,7 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
+import mmm.app.ui.theme.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -130,7 +130,7 @@ class AudiometryViewModel(private val app: MmmApplication) : ViewModel() {
 }
 
 @Composable
-fun AudiometryScreen(app: MmmApplication, onBack: () -> Unit) {
+fun AudiometryScreen(app: MmmApplication, onBack: (() -> Unit)?) {
     val vm: AudiometryViewModel = viewModel(factory = AudiometryViewModel.factory(app))
     val ui by vm.ui.collectAsStateWithLifecycle()
     val settings by app.settings.settings.collectAsStateWithLifecycle()
@@ -151,7 +151,7 @@ fun AudiometryScreen(app: MmmApplication, onBack: () -> Unit) {
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            ScreenHeader(title = "순음 청력 검사", onBack = { vm.stop(); onBack() })
+            ScreenHeader(title = "청력 검사", onBack = onBack?.let { back -> { vm.stop(); back() } })
 
             if (ui.running) {
                 RunningContent(ui.progress, onPress = vm::press, onStop = vm::stop)

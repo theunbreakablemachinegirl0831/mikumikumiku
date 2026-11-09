@@ -8,11 +8,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Card
+import mmm.app.ui.theme.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
-import androidx.compose.material3.Switch
+import mmm.app.ui.theme.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -23,93 +23,87 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import mmm.app.BuildConfig
 import mmm.app.MmmApplication
 import mmm.app.data.TrainerSettings
+import mmm.app.ui.theme.GroupCard
+import mmm.app.ui.theme.GroupDivider
 import mmm.app.ui.theme.ScreenHeader
+import mmm.app.ui.theme.SectionHeader
+import mmm.app.ui.theme.SettingRow
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import kotlin.math.roundToInt
 
 @Composable
-fun SettingsScreen(app: MmmApplication, onBack: () -> Unit, onOpenEarphones: () -> Unit) {
+fun SettingsScreen(app: MmmApplication, onBack: (() -> Unit)?, onOpenEarphones: () -> Unit) {
     val settings by app.settings.settings.collectAsStateWithLifecycle()
     val earphones by app.earphones.earphones.collectAsStateWithLifecycle()
     val active = earphones.firstOrNull { it.id == settings.activeEarphoneId }
 
-    Scaffold { padding ->
-        Column(
-            modifier = Modifier
-                .padding(padding)
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            ScreenHeader(title = "설정", onBack = onBack)
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        ScreenHeader(title = "설정", onBack = onBack)
 
-            Card(onClick = onOpenEarphones, modifier = Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("이어폰 보정", style = MaterialTheme.typography.titleMedium)
-                    Text(
-                        when {
-                            active == null -> "고른 이어폰 없음 - 눌러서 측정치로 EQ를 만든다"
-                            !settings.eqEnabled -> "${active.name} · EQ 꺼짐"
-                            active.eqText == null -> "${active.name} · 아직 EQ 없음"
-                            else -> "${active.name} · EQ 켜짐"
-                        },
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                }
-            }
-
-            Card {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            "라우드니스 매칭",
-                            style = MaterialTheme.typography.titleMedium,
-                            modifier = Modifier.weight(1f),
-                        )
-                        Switch(
-                            checked = settings.loudnessMatched,
-                            onCheckedChange = app.settings::setLoudnessMatched,
-                        )
-                    }
-                    Text(
-                        "켜 두는 것이 정상이다. 끄면 부스트된 밴드가 그냥 더 큰 소리가 되어, 음량만으로 " +
-                            "정답을 맞힐 수 있게 된다. 왜 매칭이 필요한지 직접 들어보는 시연용으로만 끈다.",
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                }
-            }
-
-            FilterCard(settings, app)
-
-            Card {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(
-                        "발췌 길이: ${settings.excerptSeconds}초",
-                        style = MaterialTheme.typography.titleMedium,
-                    )
-                    val range = TrainerSettings.EXCERPT_RANGE
-                    Slider(
-                        value = settings.excerptSeconds.toFloat(),
-                        onValueChange = { app.settings.setExcerptSeconds(it.roundToInt()) },
-                        valueRange = range.first.toFloat()..range.last.toFloat(),
-                        steps = range.last - range.first - 1,
-                    )
-                    Text(
-                        "길수록 음악의 여러 부분을 비교할 수 있지만 문제를 만드는 시간이 늘어난다. " +
-                            "다음 과제를 시작할 때부터 적용된다.",
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                }
-            }
-
-            Text(
-                "청음 훈련 v${BuildConfig.VERSION_NAME} · 빌드 ${BuildConfig.BUILD_ID}",
-                style = MaterialTheme.typography.bodySmall,
+        SectionHeader("이어폰")
+        GroupCard {
+            SettingRow(
+                title = "이어폰 보정",
+                subtitle = when {
+                    active == null -> "고른 이어폰 없음 - 측정치로 EQ를 만든다"
+                    active.eqText == null -> "${active.name} · 아직 EQ 없음"
+                    else -> active.name
+                },
+                onClick = onOpenEarphones,
+            )
+            GroupDivider()
+            SettingRow(
+                title = "이어폰 EQ 적용",
+                subtitle = "훈련, 플레이어, 실시간 모드, 다른 앱 EQ에 모두 걸린다",
+                trailing = { Switch(checked = settings.eqEnabled, onCheckedChange = app.settings::setEqEnabled) },
             )
         }
+
+        SectionHeader("훈련")
+        GroupCard {
+            SettingRow(
+                title = "라우드니스 매칭",
+                subtitle = "켜 두는 것이 정상이다. 끄면 부스트된 밴드가 그냥 더 큰 소리가 되어 음량만으로 맞힐 수 있다 - 시연용으로만 끈다",
+                trailing = { Switch(checked = settings.loudnessMatched, onCheckedChange = app.settings::setLoudnessMatched) },
+            )
+            GroupDivider()
+            Column(Modifier.padding(horizontal = 18.dp, vertical = 14.dp)) {
+                Row(Modifier.fillMaxWidth()) {
+                    Text("발췌 길이", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                    Text("${settings.excerptSeconds}초", style = MaterialTheme.typography.bodyLarge)
+                }
+                val range = TrainerSettings.EXCERPT_RANGE
+                Slider(
+                    value = settings.excerptSeconds.toFloat(),
+                    onValueChange = { app.settings.setExcerptSeconds(it.roundToInt()) },
+                    valueRange = range.first.toFloat()..range.last.toFloat(),
+                    steps = range.last - range.first - 1,
+                )
+                Text(
+                    "길수록 음악의 여러 부분을 비교할 수 있지만 문제를 만드는 시간이 늘어난다. 다음 과제부터 적용된다.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        }
+
+        SectionHeader("필터 (밴드 식별 · 레조넌스)")
+        FilterCard(settings, app)
+
+        SectionHeader("정보")
+        GroupCard {
+            SettingRow(
+                title = "청음 훈련 v${BuildConfig.VERSION_NAME}",
+                subtitle = "빌드 ${BuildConfig.BUILD_ID}",
+            )
+        }
+        Spacer(Modifier.height(12.dp))
     }
 }
 
@@ -122,9 +116,8 @@ fun SettingsScreen(app: MmmApplication, onBack: () -> Unit, onOpenEarphones: () 
  */
 @Composable
 private fun FilterCard(settings: TrainerSettings, app: MmmApplication) {
-    Card {
+    GroupCard {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("필터 (밴드 식별 · 레조넌스)", style = MaterialTheme.typography.titleMedium)
             Text(
                 "기본값은 레벨마다 정해진 값이다 (밴드 식별은 +12 dB부터 시작). 직접 지정하면 모든 " +
                     "레벨에 같은 값이 쓰이고, 레벨이 오르면 격자와 보기 수만 어려워진다.",

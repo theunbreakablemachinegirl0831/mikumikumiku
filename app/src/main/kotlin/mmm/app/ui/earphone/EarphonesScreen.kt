@@ -9,12 +9,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
+import mmm.app.ui.theme.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Switch
+import mmm.app.ui.theme.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -33,7 +33,7 @@ import mmm.app.ui.theme.ScreenHeader
 
 /** The listener's earphones: which one is in use, whether its EQ is on, and a way to add more. */
 @Composable
-fun EarphonesScreen(app: MmmApplication, onBack: () -> Unit, onOpen: (String) -> Unit, onSearch: () -> Unit) {
+fun EarphonesScreen(app: MmmApplication, onBack: (() -> Unit)?, onOpen: (String) -> Unit, onSearch: () -> Unit) {
     val earphones by app.earphones.earphones.collectAsStateWithLifecycle()
     val settings by app.settings.settings.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
@@ -48,7 +48,7 @@ fun EarphonesScreen(app: MmmApplication, onBack: () -> Unit, onOpen: (String) ->
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            ScreenHeader(title = "이어폰 보정", onBack = onBack)
+            ScreenHeader(title = "이어폰", onBack = onBack)
             Text(
                 "이어폰마다 공개된 B&K 5128 측정치를 넣고 타깃을 고르면, 그 타깃에 맞추는 EQ를 만든다. " +
                     "고른 이어폰의 EQ는 훈련과 실시간 모드 모두에 걸린다.",
