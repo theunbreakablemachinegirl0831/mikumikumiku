@@ -15,6 +15,8 @@ import mmm.training.AnswerDraft
 import mmm.training.Curriculum
 import mmm.training.ExerciseFamily
 import mmm.training.FilterOverrides
+import mmm.training.FrequencyRange
+import mmm.training.PracticeFocus
 import mmm.training.Question
 import mmm.training.SessionStats
 import mmm.training.TrainingSession
@@ -39,6 +41,8 @@ data class ExerciseUiState(
      * description still quotes the ladder's numbers and would otherwise say the wrong thing.
      */
     val filterNote: String? = null,
+    /** The practice range in force, if any, and how questions avoid what the excerpt lacks. */
+    val focusNote: String? = null,
     val playingId: String? = null,
     val picks: List<String> = emptyList(),
     val canSubmit: Boolean = false,
@@ -94,16 +98,23 @@ class ExerciseViewModel(
             } else {
                 FilterOverrides.NONE
             }
+            val focus = if (family in PracticeFocus.APPLIES_TO) {
+                PracticeFocus(range = settings.practiceRange, spectrum = opened.spectrum)
+            } else {
+                PracticeFocus.ANY
+            }
             session = TrainingSession(
                 family = family,
                 random = Random(System.nanoTime()),
                 startLevel = app.progress.level(family),
                 overrides = overrides,
+                focus = focus,
             )
             _ui.value = _ui.value.copy(
                 sourceLabel = opened.sourceLabel,
                 error = null,
                 filterNote = describe(overrides),
+                focusNote = describe(focus),
             )
             nextQuestion()
         } catch (e: Exception) {
@@ -213,6 +224,13 @@ class ExerciseViewModel(
             overrides.q?.let { "Q ${trim(it)}" },
         )
         return "사용자 지정 필터: ${parts.joinToString(" · ")} - 레벨 설명의 값 대신 적용된다"
+    }
+
+    private fun describe(focus: PracticeFocus): String? {
+        val range = focus.range ?: return null
+        val name = FrequencyRange.PRESETS.firstOrNull { it.second == range }?.first
+        return "연습 음역대: " + (name?.let { "$it " } ?: "") + range.label +
+            " - 이 범위 안에서만 문제가 나온다"
     }
 
     private fun trim(value: Double): String =

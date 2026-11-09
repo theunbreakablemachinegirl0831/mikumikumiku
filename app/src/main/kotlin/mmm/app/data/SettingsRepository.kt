@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import mmm.training.FilterOverrides
+import mmm.training.FrequencyRange
 import kotlin.math.asinh
 import kotlin.math.ln
 
@@ -48,6 +49,8 @@ data class TrainerSettings(
     /** The earphone being listened on, whose EQ is applied when [eqEnabled]. */
     val activeEarphoneId: String? = null,
     val eqEnabled: Boolean = true,
+    /** The range Band ID and resonance practise in, or null for the whole spectrum. */
+    val practiceRange: FrequencyRange? = null,
 ) {
     fun filterOverrides(): FilterOverrides = FilterOverrides(gainDb = filterGainDb, q = filterQ)
 
@@ -120,6 +123,16 @@ class SettingsRepository(
 
     fun setEqEnabled(on: Boolean) = update { it[EQ_ENABLED] = on }
 
+    fun setPracticeRange(range: FrequencyRange?) = update { prefs ->
+        if (range == null) {
+            prefs.remove(RANGE_LOW)
+            prefs.remove(RANGE_HIGH)
+        } else {
+            prefs[RANGE_LOW] = range.lowHz
+            prefs[RANGE_HIGH] = range.highHz
+        }
+    }
+
     fun setSource(choice: SourceChoice) = update { prefs ->
         when (choice) {
             SourceChoice.PinkNoise -> {
@@ -141,6 +154,9 @@ class SettingsRepository(
         scope.launch { store.edit { prefs -> block(prefs) } }
     }
 
+    private fun rangeOf(low: Double?, high: Double?): FrequencyRange? =
+        if (low != null && high != null && high > low && low > 0) FrequencyRange(low, high) else null
+
     private fun parse(prefs: Preferences): TrainerSettings {
         val uri = prefs[SOURCE_URI]
         val source = if (prefs[SOURCE_KIND] == KIND_FILE && uri != null) {
@@ -156,6 +172,7 @@ class SettingsRepository(
             filterQ = prefs[FILTER_Q],
             activeEarphoneId = prefs[ACTIVE_EARPHONE],
             eqEnabled = prefs[EQ_ENABLED] ?: true,
+            practiceRange = rangeOf(prefs[RANGE_LOW], prefs[RANGE_HIGH]),
         )
     }
 
@@ -169,6 +186,8 @@ class SettingsRepository(
         val FILTER_Q = doublePreferencesKey("settings_filter_q")
         val ACTIVE_EARPHONE = stringPreferencesKey("settings_active_earphone")
         val EQ_ENABLED = booleanPreferencesKey("settings_eq_enabled")
+        val RANGE_LOW = doublePreferencesKey("settings_range_low")
+        val RANGE_HIGH = doublePreferencesKey("settings_range_high")
         const val KIND_PINK = "pink"
         const val KIND_FILE = "file"
     }

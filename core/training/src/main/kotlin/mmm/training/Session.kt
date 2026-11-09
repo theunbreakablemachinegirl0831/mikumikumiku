@@ -40,6 +40,8 @@ public class TrainingSession(
     private val generator: ExerciseGenerator = Curriculum.generator(family),
     /** Listener-chosen filter settings, applied to every question this session generates. */
     public val overrides: FilterOverrides = FilterOverrides.NONE,
+    /** The range to practise in, and what the source audio can carry; see [PracticeFocus]. */
+    public val focus: PracticeFocus = PracticeFocus.ANY,
 ) {
     public val progression: LevelProgression =
         LevelProgression(maxLevel = generator.levels.lastIndex, startLevel = startLevel)
@@ -56,7 +58,7 @@ public class TrainingSession(
 
     /** Generates the next trial at the current level. */
     public fun next(): Question =
-        generator.generate(progression.level, random, overrides).also { current = it }
+        generator.generate(progression.level, random, overrides, focus).also { current = it }
 
     /**
      * Grades [answer] against the outstanding question and advances the ladder.

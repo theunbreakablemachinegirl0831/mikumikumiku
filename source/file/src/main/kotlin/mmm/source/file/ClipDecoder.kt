@@ -30,8 +30,11 @@ public data class DecodedClip(
  */
 public object ClipDecoder {
 
-    /** Longer than any exercise needs, and a guard against someone picking a two-hour podcast. */
-    public const val MAX_EXCERPT_SECONDS: Double = 30.0
+    /**
+     * Long enough to search a song for its best excerpt, short enough to hold in memory (a minute
+     * of 48 kHz stereo float is 23 MB), and a guard against someone picking a two-hour podcast.
+     */
+    public const val MAX_EXCERPT_SECONDS: Double = 60.0
 
     public class DecodeException(message: String, cause: Throwable? = null) : Exception(message, cause)
 

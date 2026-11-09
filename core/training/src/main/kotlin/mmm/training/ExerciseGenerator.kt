@@ -12,11 +12,13 @@ public interface ExerciseGenerator {
     /**
      * @param level index into [levels]; out-of-range values are clamped.
      * @param overrides listener-chosen filter settings; families without a filter ignore them.
+     * @param focus where in the spectrum to aim; families without a frequency ignore it.
      */
     public fun generate(
         level: Int,
         random: Random,
         overrides: FilterOverrides = FilterOverrides.NONE,
+        focus: PracticeFocus = PracticeFocus.ANY,
     ): Question
 }
 

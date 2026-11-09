@@ -7,9 +7,12 @@ import mmm.training.Choice
 import mmm.training.ExerciseFamily
 import mmm.training.ExerciseGenerator
 import mmm.training.FilterOverrides
+import mmm.training.FrequencyRange
+import mmm.training.PracticeFocus
 import mmm.training.GeneratorSupport
 import mmm.training.LevelSpec
 import mmm.training.Question
+import kotlin.math.pow
 import kotlin.random.Random
 
 /**
@@ -52,12 +55,40 @@ public class BandIdGenerator : ExerciseGenerator {
 
     override val family: ExerciseFamily get() = ExerciseFamily.BAND_ID
 
+    /**
+     * The level's grid, or - when the listener picked a range to practise - the level's resolution
+     * across that range instead. A range too narrow for even two bands at this resolution is
+     * widened by one band each side; a one-answer question is not a question.
+     */
+    private fun gridFor(params: Params, range: FrequencyRange?): BandGrid {
+        if (range == null) return BandGrid(params.resolution, params.lowHz, params.highHz)
+        val low = range.lowHz.coerceAtLeast(FrequencyRange.MIN_HZ)
+        val high = range.highHz.coerceAtMost(MAX_CENTER_HZ)
+        val grid = BandGrid(params.resolution, low, high)
+        if (grid.size >= 2) return grid
+        val step = 2.0.pow(1.0 / params.resolution.bandsPerOctave)
+        return BandGrid(params.resolution, low / step, (high * step).coerceAtMost(MAX_CENTER_HZ))
+    }
+
+    private companion object {
+        /** A band centred higher would reach past what the fixtures and most ears handle. */
+        const val MAX_CENTER_HZ = 16000.0
+    }
+
     override val levels: List<LevelSpec> = ladder.map { it.second }
 
-    override fun generate(level: Int, random: Random, overrides: FilterOverrides): Question {
+    override fun generate(
+        level: Int,
+        random: Random,
+        overrides: FilterOverrides,
+        focus: PracticeFocus,
+    ): Question {
         val params = ladder[level.coerceIn(ladder.indices)].first
-        val grid = BandGrid(params.resolution, params.lowHz, params.highHz)
-        val band = grid.bands[random.nextInt(grid.size)]
+        val grid = gridFor(params, focus.range)
+        // Only aim where the audio has something to hear; the answer buttons still cover the whole
+        // grid, so leaving the empty bands out does not give the answer away.
+        val candidates = grid.bands.filter { focus.isUsable(it.lowerHz, it.upperHz) }.ifEmpty { grid.bands }
+        val band = candidates[random.nextInt(candidates.size)]
 
         val magnitude = overrides.gainDb ?: params.gainDb
         val gainDb = if (params.allowCuts && random.nextBoolean()) -magnitude else magnitude

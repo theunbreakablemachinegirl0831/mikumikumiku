@@ -5,6 +5,7 @@ import mmm.training.Choice
 import mmm.training.ExerciseFamily
 import mmm.training.ExerciseGenerator
 import mmm.training.FilterOverrides
+import mmm.training.PracticeFocus
 import mmm.training.GeneratorSupport
 import mmm.training.LevelSpec
 import mmm.training.Question
@@ -44,7 +45,12 @@ public class BandwidthGenerator : ExerciseGenerator {
 
     override val levels: List<LevelSpec> = ladder.map { it.second }
 
-    override fun generate(level: Int, random: Random, overrides: FilterOverrides): Question {
+    override fun generate(
+        level: Int,
+        random: Random,
+        overrides: FilterOverrides,
+        focus: PracticeFocus,
+    ): Question {
         val params = ladder[level.coerceIn(ladder.indices)].first
         val lowCutTrial = params.testLowCut && random.nextBoolean()
 

@@ -4,6 +4,7 @@ import mmm.training.ArtifactSpec
 import mmm.training.ExerciseFamily
 import mmm.training.ExerciseGenerator
 import mmm.training.FilterOverrides
+import mmm.training.PracticeFocus
 import mmm.training.GeneratorSupport
 import mmm.training.LevelSpec
 import mmm.training.Question
@@ -34,12 +35,37 @@ public class ResonanceGenerator : ExerciseGenerator {
 
     override val family: ExerciseFamily get() = ExerciseFamily.RESONANCE
 
+    /**
+     * Log-uniform across 100 Hz - 8 kHz, or across the listener's chosen range; uniform in Hz would
+     * put nearly every trial in the treble. A few draws are allowed to land somewhere the audio
+     * has energy before settling for the last one.
+     */
+    private fun pickFrequency(focus: PracticeFocus, random: Random): Double {
+        val low = focus.range?.lowHz?.coerceAtLeast(40.0) ?: 100.0
+        val high = focus.range?.highHz?.coerceAtMost(16000.0) ?: 8000.0
+        var frequency = low
+        repeat(DRAWS) {
+            frequency = low * (high / low).pow(random.nextDouble())
+            val edge = 2.0.pow(1.0 / 6)
+            if (focus.isUsable(frequency / edge, frequency * edge)) return frequency
+        }
+        return frequency
+    }
+
+    private companion object {
+        const val DRAWS = 20
+    }
+
     override val levels: List<LevelSpec> = ladder.map { it.second }
 
-    override fun generate(level: Int, random: Random, overrides: FilterOverrides): Question {
+    override fun generate(
+        level: Int,
+        random: Random,
+        overrides: FilterOverrides,
+        focus: PracticeFocus,
+    ): Question {
         val params = ladder[level.coerceIn(ladder.indices)].first
-        // Log-uniform across 100 Hz - 8 kHz; uniform in Hz would put nearly every trial in the treble.
-        val frequency = 100.0 * (80.0).pow(random.nextDouble())
+        val frequency = pickFrequency(focus, random)
         val spec = ArtifactSpec.Resonance(
             frequencyHz = frequency,
             q = overrides.q ?: params.q,

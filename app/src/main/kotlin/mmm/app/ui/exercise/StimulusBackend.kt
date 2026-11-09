@@ -8,6 +8,7 @@ import mmm.app.live.LiveSession
 import mmm.app.playback.StimulusPlayer
 import mmm.app.source.LoadedSource
 import mmm.app.source.StimulusSource
+import mmm.dsp.SpectrumProfile
 import mmm.eq.EqProfile
 import mmm.training.Question
 import mmm.training.render.StimulusRenderer
@@ -19,6 +20,9 @@ import mmm.training.render.StimulusRenderer
 internal interface StimulusBackend {
     /** Shown in the header, so it is always clear what is being listened to. */
     val sourceLabel: String
+
+    /** What the audio has energy in, when that is known before the questions are made. */
+    val spectrum: SpectrumProfile?
 
     /** Called once before the first question; may do slow work. */
     suspend fun open()
@@ -48,7 +52,14 @@ internal class FileBackend(
     private val player = StimulusPlayer()
     private var source: LoadedSource? = null
 
-    override val sourceLabel: String get() = source?.label ?: ""
+    override val sourceLabel: String
+        get() = source?.let { s ->
+            val start = s.startSeconds ?: return@let s.label
+            val total = start.toInt()
+            "${s.label} (${total / 60}:${(total % 60).toString().padStart(2, '0')}부터)"
+        } ?: ""
+
+    override val spectrum: SpectrumProfile? get() = source?.spectrum
 
     override suspend fun open() {
         source = withContext(Dispatchers.IO) {
@@ -91,6 +102,9 @@ internal class LiveBackend(
     private var question: Question? = null
 
     override val sourceLabel: String get() = "실시간 (USB DAC)"
+
+    /** Live music changes from bar to bar; there is no spectrum to plan questions around. */
+    override val spectrum: SpectrumProfile? get() = null
 
     override suspend fun open() {
         check(live.capturing) { "실시간 캡처가 돌고 있지 않다. 실시간 모드 화면에서 먼저 캡처를 시작한다." }

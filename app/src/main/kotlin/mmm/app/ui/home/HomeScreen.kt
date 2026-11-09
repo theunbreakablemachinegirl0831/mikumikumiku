@@ -94,6 +94,8 @@ fun HomeScreen(
                 onPickFile = { pickFile.launch(arrayOf("audio/*")) },
             )
 
+            PracticeRangeCard(current = settings.practiceRange, onChange = app.settings::setPracticeRange)
+
             Text("과제", style = MaterialTheme.typography.titleMedium)
             Curriculum.families.forEach { family ->
                 FamilyCard(
