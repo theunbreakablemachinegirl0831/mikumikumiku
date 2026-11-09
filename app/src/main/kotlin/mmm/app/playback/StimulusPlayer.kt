@@ -2,6 +2,7 @@ package mmm.app.playback
 
 import mmm.audio.AudioOutput
 import mmm.audio.PlaybackEngine
+import mmm.dsp.AudioProcessor
 import mmm.source.file.SwitchableClipSource
 import mmm.training.render.RenderedQuestion
 
@@ -21,6 +22,7 @@ class StimulusPlayer {
     private var sampleRate = 0
     private var rendered: RenderedQuestion? = null
     private var running = false
+    private var correctionFactory: (() -> AudioProcessor)? = null
 
     /** The stimulus currently audible, or null when stopped. */
     var playingId: String? = null
@@ -39,12 +41,20 @@ class StimulusPlayer {
             val clip = SwitchableClipSource(first.audio, question.sampleRate, loop = true)
             output = out
             source = clip
-            engine = PlaybackEngine(clip, out)
+            engine = PlaybackEngine(clip, out).also { e ->
+                correctionFactory?.let { e.setOutputCorrection(it()) }
+            }
             sampleRate = question.sampleRate
         } else {
             source?.select(first.audio)
         }
         source?.rewind()
+    }
+
+    /** The earphone EQ, applied after every stimulus; null plays them untouched. */
+    fun setCorrection(factory: (() -> AudioProcessor)?) {
+        correctionFactory = factory
+        engine?.setOutputCorrection(factory?.invoke())
     }
 
     /** Starts or switches to [stimulusId], keeping the playhead where it is. */

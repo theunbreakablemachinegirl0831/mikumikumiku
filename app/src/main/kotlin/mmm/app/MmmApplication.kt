@@ -8,7 +8,13 @@ import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import mmm.app.data.DataStoreProgressStore
+import mmm.app.data.EarphoneRepository
+import mmm.eq.EqProfile
 import mmm.app.data.SettingsRepository
 import mmm.app.live.LiveSession
 
@@ -33,6 +39,18 @@ class MmmApplication : Application() {
         SettingsRepository(applicationContext.trainerDataStore, appScope)
     }
 
+    val earphones: EarphoneRepository by lazy { EarphoneRepository(applicationContext, appScope) }
+
+    /**
+     * The EQ every playback path applies: the active earphone's, when EQ is on and one has been
+     * fitted. Null means play untouched.
+     */
+    val activeCorrection: StateFlow<EqProfile?> by lazy {
+        combine(settings.settings, earphones.earphones) { s, list ->
+            if (!s.eqEnabled) null else list.firstOrNull { it.id == s.activeEarphoneId }?.eq
+        }.stateIn(appScope, SharingStarted.Eagerly, null)
+    }
+
     /** The claimed DAC and live capture, which have to outlive the screens that use them. */
-    val live: LiveSession by lazy { LiveSession(applicationContext, appScope) }
+    val live: LiveSession by lazy { LiveSession(applicationContext, appScope, activeCorrection) }
 }

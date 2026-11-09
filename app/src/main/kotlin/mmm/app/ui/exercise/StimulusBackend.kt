@@ -8,6 +8,7 @@ import mmm.app.live.LiveSession
 import mmm.app.playback.StimulusPlayer
 import mmm.app.source.LoadedSource
 import mmm.app.source.StimulusSource
+import mmm.eq.EqProfile
 import mmm.training.Question
 import mmm.training.render.StimulusRenderer
 
@@ -30,6 +31,9 @@ internal interface StimulusBackend {
     fun stop()
 
     fun release()
+
+    /** The earphone EQ, or null for none. */
+    fun setCorrection(profile: EqProfile?)
 }
 
 /**
@@ -66,6 +70,9 @@ internal class FileBackend(
     override fun stop() = player.stop()
 
     override fun release() = player.release()
+
+    override fun setCorrection(profile: EqProfile?) =
+        player.setCorrection(profile?.let { p -> { p.createProcessor() } })
 }
 
 /**
@@ -102,4 +109,7 @@ internal class LiveBackend(
     override fun stop() = live.setArtifact(null, loudnessMatched)
 
     override fun release() = stop()
+
+    /** The live session applies the earphone EQ itself, for the capture as a whole. */
+    override fun setCorrection(profile: EqProfile?) = Unit
 }

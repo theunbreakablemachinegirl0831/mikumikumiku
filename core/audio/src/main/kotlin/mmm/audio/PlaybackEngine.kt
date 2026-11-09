@@ -30,6 +30,9 @@ public class PlaybackEngine(
     private val pending = AtomicReference<AudioProcessor?>(null)
     private var active: AudioProcessor = PassThroughProcessor
 
+    private val pendingCorrection = AtomicReference<AudioProcessor?>(null)
+    private var correction: AudioProcessor = PassThroughProcessor
+
     @Volatile
     private var running = false
     private var worker: Thread? = null
@@ -81,6 +84,19 @@ public class PlaybackEngine(
         pending.set(PassThroughProcessor)
     }
 
+    /**
+     * Installs the correction for the listener's earphone, or removes it with null.
+     *
+     * It runs after the artifact, last before the output: it stands in for the earphone being
+     * different from the target, so it belongs next to the earphone. The artifact - and its
+     * loudness match - then reach the ear as the exercise meant them to.
+     */
+    public fun setOutputCorrection(processor: AudioProcessor?) {
+        val staged = processor ?: PassThroughProcessor
+        staged.prepare(format)
+        pendingCorrection.set(staged)
+    }
+
     public fun start() {
         if (running) return
         inputMeter.reset()
@@ -109,6 +125,7 @@ public class PlaybackEngine(
     private fun loop() {
         while (running) {
             pending.getAndSet(null)?.let { active = it }
+            pendingCorrection.getAndSet(null)?.let { correction = it }
 
             when (val frames = source.read(buffer)) {
                 -1 -> {
@@ -125,6 +142,7 @@ public class PlaybackEngine(
                 else -> {
                     inputMeter.update(buffer)
                     active.process(buffer)
+                    correction.process(buffer)
                     outputMeter.update(buffer)
                     framesProcessed += frames
                     val written = output.write(buffer)

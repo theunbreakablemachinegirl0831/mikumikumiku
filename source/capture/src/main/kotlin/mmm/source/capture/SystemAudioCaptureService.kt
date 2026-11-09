@@ -186,6 +186,7 @@ public class SystemAudioCaptureService : Service() {
             null
         }
         val playback = PlaybackEngine(ringBuffer, output, blockFrames = BLOCK_FRAMES)
+        correctionFactory?.let { playback.setOutputCorrection(it()) }
 
         record = audioRecord
         ring = ringBuffer
@@ -300,6 +301,17 @@ public class SystemAudioCaptureService : Service() {
 
     public fun clearArtifact() {
         engine?.clearArtifact()
+    }
+
+    private var correctionFactory: (() -> AudioProcessor)? = null
+
+    /**
+     * The earphone correction, kept as a factory so a capture started later gets a fresh copy -
+     * a processor holds filter state and belongs to one stream.
+     */
+    public fun setOutputCorrection(factory: (() -> AudioProcessor)?) {
+        correctionFactory = factory
+        engine?.setOutputCorrection(factory?.invoke())
     }
 
     // ---------------------------------------------------------------- foreground

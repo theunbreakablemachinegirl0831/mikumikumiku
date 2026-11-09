@@ -22,6 +22,7 @@ import mmm.source.usb.UsbAudioController
 import mmm.source.usb.UsbAudioSink
 import mmm.source.usb.UsbIsoStreamer
 import mmm.source.usb.UsbStreamStats
+import mmm.eq.EqProfile
 import mmm.training.ArtifactSpec
 import kotlin.math.pow
 import kotlin.math.sqrt
@@ -45,7 +46,11 @@ data class LiveStatus(
  * the test tone or the captured audio - and switching between them reopens the stream, since the
  * two need different pacing (see [UsbIsoStreamer]).
  */
-class LiveSession(private val context: Context, private val scope: CoroutineScope) {
+class LiveSession(
+    private val context: Context,
+    private val scope: CoroutineScope,
+    private val correction: StateFlow<EqProfile?>,
+) {
 
     val usb = UsbAudioController(context)
     val capture = CaptureController(context, scope)
@@ -63,6 +68,13 @@ class LiveSession(private val context: Context, private val scope: CoroutineScop
         if (started) return
         started = true
         usb.start()
+        scope.launch {
+            // The earphone EQ follows the settings for as long as the app runs, capture or not,
+            // so a capture started later picks up whatever is current.
+            correction.collect { profile ->
+                capture.setOutputCorrection(profile?.let { p -> { p.createProcessor() } })
+            }
+        }
         scope.launch {
             capture.state.collect { state ->
                 if (state is CaptureState.Failed && _status.value.output == LiveOutput.CAPTURE) {

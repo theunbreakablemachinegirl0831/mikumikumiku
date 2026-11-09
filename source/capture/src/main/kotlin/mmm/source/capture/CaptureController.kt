@@ -43,6 +43,7 @@ public class CaptureController(
             val local = (binder as? SystemAudioCaptureService.LocalBinder)?.service ?: return
             service = local
             bound = true
+            local.setOutputCorrection(correctionFactory)
             scope.launch { local.state.collect { _state.value = it } }
             scope.launch { local.telemetry.collect { _telemetry.value = it } }
         }
@@ -94,5 +95,13 @@ public class CaptureController(
 
     public fun clearArtifact() {
         service?.clearArtifact()
+    }
+
+    private var correctionFactory: (() -> AudioProcessor)? = null
+
+    /** The earphone correction for captured audio; remembered until the service is bound. */
+    public fun setOutputCorrection(factory: (() -> AudioProcessor)?) {
+        correctionFactory = factory
+        service?.setOutputCorrection(factory)
     }
 }

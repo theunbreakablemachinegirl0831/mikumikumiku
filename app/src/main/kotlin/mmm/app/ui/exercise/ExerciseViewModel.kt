@@ -88,6 +88,7 @@ class ExerciseViewModel(
             val opened = if (live) LiveBackend(app.live, settings.loudnessMatched) else FileBackend(app, settings)
             opened.open()
             backend = opened
+            viewModelScope.launch { app.activeCorrection.collect { opened.setCorrection(it) } }
             val overrides = if (family in FilterOverrides.APPLIES_TO) {
                 settings.filterOverrides()
             } else {

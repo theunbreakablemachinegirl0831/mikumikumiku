@@ -45,6 +45,9 @@ data class TrainerSettings(
     val filterGainDb: Double? = null,
     /** Filter Q for Band ID and resonance, or null to follow the difficulty ladder. */
     val filterQ: Double? = null,
+    /** The earphone being listened on, whose EQ is applied when [eqEnabled]. */
+    val activeEarphoneId: String? = null,
+    val eqEnabled: Boolean = true,
 ) {
     fun filterOverrides(): FilterOverrides = FilterOverrides(gainDb = filterGainDb, q = filterQ)
 
@@ -107,6 +110,16 @@ class SettingsRepository(
         }
     }
 
+    fun setActiveEarphone(id: String?) = update { prefs ->
+        if (id == null) {
+            prefs.remove(ACTIVE_EARPHONE)
+        } else {
+            prefs[ACTIVE_EARPHONE] = id
+        }
+    }
+
+    fun setEqEnabled(on: Boolean) = update { it[EQ_ENABLED] = on }
+
     fun setSource(choice: SourceChoice) = update { prefs ->
         when (choice) {
             SourceChoice.PinkNoise -> {
@@ -141,6 +154,8 @@ class SettingsRepository(
             source = source,
             filterGainDb = prefs[FILTER_GAIN_DB],
             filterQ = prefs[FILTER_Q],
+            activeEarphoneId = prefs[ACTIVE_EARPHONE],
+            eqEnabled = prefs[EQ_ENABLED] ?: true,
         )
     }
 
@@ -152,6 +167,8 @@ class SettingsRepository(
         val SOURCE_NAME = stringPreferencesKey("settings_source_name")
         val FILTER_GAIN_DB = doublePreferencesKey("settings_filter_gain_db")
         val FILTER_Q = doublePreferencesKey("settings_filter_q")
+        val ACTIVE_EARPHONE = stringPreferencesKey("settings_active_earphone")
+        val EQ_ENABLED = booleanPreferencesKey("settings_eq_enabled")
         const val KIND_PINK = "pink"
         const val KIND_FILE = "file"
     }
