@@ -171,8 +171,8 @@ private fun TargetCard(profile: EarphoneProfile, targets: List<String>, vm: Earp
     StepCard("2. 타깃") {
         if (targets.isEmpty()) {
             Text(
-                "타깃 파일이 없다. 측정치와 같은 장비(5128) 기준 타깃을 가져온다 - 예: " +
-                    "earphonesarchive.squig.link/data/targets/Harman IE 2019 for 5128 Target.txt",
+                "타깃이 없다. 측정치와 같은 장비(5128) 기준 타깃이어야 한다 - " +
+                    "\"squig.link에서 받기\"를 누르면 earphonesarchive의 타깃을 모두 받는다.",
                 style = MaterialTheme.typography.bodySmall,
             )
         }
@@ -188,7 +188,10 @@ private fun TargetCard(profile: EarphoneProfile, targets: List<String>, vm: Earp
                 )
             }
         }
-        OutlinedButton(onClick = onPick) { Text("타깃 파일 가져오기") }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = vm::fetchTargets) { Text("squig.link에서 받기") }
+            OutlinedButton(onClick = onPick) { Text("파일 가져오기") }
+        }
 
         Text("기울기: ${format(tilt.toDouble(), 2)} dB/oct", style = MaterialTheme.typography.bodyMedium)
         Slider(

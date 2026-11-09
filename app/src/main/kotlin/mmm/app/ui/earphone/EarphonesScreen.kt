@@ -33,7 +33,7 @@ import mmm.app.ui.theme.ScreenHeader
 
 /** The listener's earphones: which one is in use, whether its EQ is on, and a way to add more. */
 @Composable
-fun EarphonesScreen(app: MmmApplication, onBack: () -> Unit, onOpen: (String) -> Unit) {
+fun EarphonesScreen(app: MmmApplication, onBack: () -> Unit, onOpen: (String) -> Unit, onSearch: () -> Unit) {
     val earphones by app.earphones.earphones.collectAsStateWithLifecycle()
     val settings by app.settings.settings.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
@@ -80,9 +80,13 @@ fun EarphonesScreen(app: MmmApplication, onBack: () -> Unit, onOpen: (String) ->
                 )
             }
 
+            Button(onClick = onSearch, modifier = Modifier.fillMaxWidth()) {
+                Text("측정치 찾아서 추가 (squig.link)")
+            }
+
             Card {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("새 이어폰", style = MaterialTheme.typography.titleMedium)
+                    Text("직접 추가 (측정 파일을 가지고 있을 때)", style = MaterialTheme.typography.titleMedium)
                     OutlinedTextField(
                         value = newName,
                         onValueChange = { newName = it },

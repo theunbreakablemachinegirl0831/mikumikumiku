@@ -16,6 +16,7 @@ import kotlinx.coroutines.withContext
 import mmm.app.MmmApplication
 import mmm.app.data.EarphoneConnection
 import mmm.app.data.EarphoneProfile
+import mmm.app.data.SquigClient
 import mmm.eq.EqProfile
 import mmm.eq.FrequencyResponse
 import mmm.eq.PeqFitSettings
@@ -116,6 +117,25 @@ class EarphoneViewModel(private val app: MmmApplication, private val id: String)
     /** Drops an imported EQ and fits one from the measurement and target again. */
     fun autoFit() {
         viewModelScope.launch { refit(force = true) }
+    }
+
+    /** Downloads every target the squig.link site offers, so they can be chosen here. */
+    fun fetchTargets() {
+        viewModelScope.launch {
+            _ui.value = _ui.value.copy(busy = "타깃 목록을 받는 중")
+            val client = SquigClient()
+            val names = runCatching { client.targetNames() }.getOrElse { SquigClient.FALLBACK_TARGETS }
+            var fetched = 0
+            for (name in names) {
+                val text = runCatching { client.target(name) }.getOrNull() ?: continue
+                if (app.earphones.importTarget("$name.txt", text) != null) fetched++
+            }
+            _ui.value = _ui.value.copy(
+                busy = null,
+                message = if (fetched == 0) "타깃을 받지 못했다. 인터넷 연결을 확인한다." else "타깃 ${fetched}개를 받았다",
+            )
+            refit()
+        }
     }
 
     fun use() {

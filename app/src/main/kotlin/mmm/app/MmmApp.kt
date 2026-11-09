@@ -7,6 +7,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import mmm.app.ui.earphone.EarphoneScreen
+import mmm.app.ui.earphone.EarphoneSearchScreen
 import mmm.app.ui.earphone.EarphonesScreen
 import mmm.app.ui.exercise.ExerciseScreen
 import mmm.app.ui.home.HomeScreen
@@ -23,6 +24,7 @@ private object Routes {
     const val LIVE = "live"
     const val EARPHONES = "earphones"
     const val EARPHONE = "earphone/{id}"
+    const val EARPHONE_SEARCH = "earphone-search"
 
     fun earphone(id: String) = "earphone/$id"
 
@@ -81,6 +83,18 @@ fun MmmApp(app: MmmApplication) {
                 app = app,
                 onBack = { nav.popBackStack() },
                 onOpen = { nav.navigate(Routes.earphone(it)) },
+                onSearch = { nav.navigate(Routes.EARPHONE_SEARCH) },
+            )
+        }
+        composable(Routes.EARPHONE_SEARCH) {
+            EarphoneSearchScreen(
+                app = app,
+                onBack = { nav.popBackStack() },
+                onAdded = { id ->
+                    nav.navigate(Routes.earphone(id)) {
+                        popUpTo(Routes.EARPHONE_SEARCH) { inclusive = true }
+                    }
+                },
             )
         }
         composable(
