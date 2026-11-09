@@ -32,10 +32,15 @@ data class EarphoneProfile(
     /** Detail correction up to 20 kHz instead of 10 kHz. */
     val fullRange: Boolean = false,
     val hasMeasurement: Boolean = false,
-    /** The fitted EQ in Equalizer APO text, or null before one has been made. */
+    /** The EQ in Equalizer APO text, or null before one has been made. */
     val eqText: String? = null,
+    /**
+     * True when [eqText] came from an imported file (AutoEq's ParametricEQ.txt, say) rather than
+     * from fitting here, so changing the target does not silently replace it.
+     */
+    val importedEq: Boolean = false,
 ) {
-    val eq: EqProfile? get() = eqText?.let(EqProfile::parseApo)
+    val eq: EqProfile? get() = eqText?.let { EqProfile.parseApo(it) }
 }
 
 /**
@@ -90,7 +95,7 @@ class EarphoneRepository(context: Context, private val scope: CoroutineScope) {
         if (responses.isEmpty()) return@withContext 0
         val average = FrequencyResponse.average(responses)
         File(folder(id), MEASUREMENT).writeText(toText(average))
-        profile(id)?.let { writeMeta(it.copy(eqText = null)) }
+        profile(id)?.let { if (!it.importedEq) writeMeta(it.copy(eqText = null)) }
         reload()
         responses.size
     }
@@ -128,6 +133,7 @@ class EarphoneRepository(context: Context, private val scope: CoroutineScope) {
             profile.targetName?.let { setProperty("target", it) }
             setProperty("tilt", profile.tiltDbPerOctave.toString())
             setProperty("fullRange", profile.fullRange.toString())
+            setProperty("importedEq", profile.importedEq.toString())
         }
         File(folder, META).outputStream().use { properties.store(it, null) }
         val eqFile = File(folder, EQ)
@@ -148,6 +154,7 @@ class EarphoneRepository(context: Context, private val scope: CoroutineScope) {
                 targetName = p.getProperty("target"),
                 tiltDbPerOctave = p.getProperty("tilt")?.toDoubleOrNull() ?: 0.0,
                 fullRange = p.getProperty("fullRange")?.toBoolean() ?: false,
+                importedEq = p.getProperty("importedEq")?.toBoolean() ?: false,
                 hasMeasurement = File(folder, MEASUREMENT).exists(),
                 eqText = File(folder, EQ).takeIf { it.exists() }?.readText(),
             )

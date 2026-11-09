@@ -21,6 +21,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -43,9 +44,12 @@ fun HomeScreen(
     onOpenProgress: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenLive: () -> Unit,
+    onOpenEarphones: () -> Unit,
 ) {
     val progress by app.progress.progress.collectAsStateWithLifecycle()
     val settings by app.settings.settings.collectAsStateWithLifecycle()
+    val earphones by app.earphones.earphones.collectAsStateWithLifecycle()
+    val activeEarphone = earphones.firstOrNull { it.id == settings.activeEarphoneId }
     val context = LocalContext.current
 
     val pickFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -74,6 +78,15 @@ fun HomeScreen(
                 style = MaterialTheme.typography.bodySmall,
                 fontFamily = FontFamily.Monospace,
             )
+            TextButton(onClick = onOpenEarphones) {
+                Text(
+                    when {
+                        activeEarphone == null -> "이어폰: 보정 없음 (설정하기)"
+                        !settings.eqEnabled || activeEarphone.eqText == null -> "이어폰: ${activeEarphone.name} · EQ 꺼짐"
+                        else -> "이어폰: ${activeEarphone.name} · EQ 켜짐"
+                    }
+                )
+            }
 
             SourceCard(
                 current = settings.source,

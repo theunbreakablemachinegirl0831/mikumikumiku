@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import mmm.app.MmmApplication
+import mmm.app.data.EarphoneConnection
 import mmm.app.live.LiveOutput
 import mmm.app.live.LiveSession
 import mmm.app.live.LiveStatus
@@ -58,6 +59,9 @@ fun LiveScreen(app: MmmApplication, onBack: () -> Unit, onOpenFamily: (ExerciseF
     val report by live.usb.report.collectAsStateWithLifecycle()
     val status by live.status.collectAsStateWithLifecycle()
     val capture by live.capture.state.collectAsStateWithLifecycle()
+    val settings by app.settings.settings.collectAsStateWithLifecycle()
+    val earphones by app.earphones.earphones.collectAsStateWithLifecycle()
+    val activeEarphone = earphones.firstOrNull { it.id == settings.activeEarphoneId }
 
     val projection = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         val data = result.data
@@ -105,6 +109,12 @@ fun LiveScreen(app: MmmApplication, onBack: () -> Unit, onOpenFamily: (ExerciseF
             )
 
             status.message?.let { NoteCard(it) }
+            if (activeEarphone?.connection == EarphoneConnection.BLUETOOTH) {
+                NoteCard(
+                    "지금 고른 이어폰(${activeEarphone.name})은 블루투스다. 실시간 모드는 USB DAC으로만 나오므로, " +
+                        "DAC에 꽂은 유선 이어폰을 이어폰 보정에서 골라야 EQ가 맞는다."
+                )
+            }
 
             DacCard(report, status, live)
             ToneCard(status, live)

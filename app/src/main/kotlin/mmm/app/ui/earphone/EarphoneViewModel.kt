@@ -10,12 +10,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import mmm.app.MmmApplication
+import mmm.app.data.EarphoneConnection
 import mmm.app.data.EarphoneProfile
+import mmm.eq.EqProfile
 import mmm.eq.FrequencyResponse
-import mmm.eq.PeqFitResult
 import mmm.eq.PeqFitSettings
 import mmm.eq.PeqFitter
 
@@ -25,7 +27,12 @@ data class EarphoneUiState(
     /** Measurement, target and prediction, all normalised to 0 dB at 500 Hz-1 kHz. */
     val measured: FrequencyResponse? = null,
     val target: FrequencyResponse? = null,
-    val fit: PeqFitResult? = null,
+    val predicted: FrequencyResponse? = null,
+    val eq: EqProfile? = null,
+    /** How far from the target before and after, over the detailed range; only for a fitted EQ. */
+    val rmsBeforeDb: Double? = null,
+    val rmsAfterDb: Double? = null,
+    val imported: Boolean = false,
 )
 
 /**
@@ -40,22 +47,26 @@ class EarphoneViewModel(private val app: MmmApplication, private val id: String)
     val ui: StateFlow<EarphoneUiState> = _ui.asStateFlow()
 
     init {
-        viewModelScope.launch { refit() }
+        viewModelScope.launch {
+            // The repository reads its folder in the background at start-up; wait for this one.
+            app.earphones.earphones.first { list -> list.any { it.id == id } }
+            refit()
+        }
     }
 
     fun profile(): EarphoneProfile? = app.earphones.profile(id)
 
     fun rename(name: String) = edit { it.copy(name = name) }
 
-    fun setConnection(profile: EarphoneProfile) = edit { profile }
+    fun setConnection(connection: EarphoneConnection) = edit { it.copy(connection = connection) }
 
     fun setNote(note: String) = edit { it.copy(note = note) }
 
-    fun chooseTarget(name: String) = edit(refit = true) { it.copy(targetName = name) }
+    fun chooseTarget(name: String) = edit(thenRefit = true) { it.copy(targetName = name) }
 
-    fun setTilt(dbPerOctave: Double) = edit(refit = true) { it.copy(tiltDbPerOctave = dbPerOctave) }
+    fun setTilt(dbPerOctave: Double) = edit(thenRefit = true) { it.copy(tiltDbPerOctave = dbPerOctave) }
 
-    fun setFullRange(on: Boolean) = edit(refit = true) { it.copy(fullRange = on) }
+    fun setFullRange(on: Boolean) = edit(thenRefit = true) { it.copy(fullRange = on) }
 
     fun importMeasurement(uris: List<Uri>) {
         if (uris.isEmpty()) return
@@ -83,6 +94,30 @@ class EarphoneViewModel(private val app: MmmApplication, private val id: String)
         }
     }
 
+    /**
+     * Uses an EQ from a file - AutoEq's ParametricEQ.txt or anything else in the Equalizer APO
+     * format - instead of fitting one here. It stays until [autoFit] is asked for.
+     */
+    fun importEq(uri: Uri) {
+        viewModelScope.launch {
+            val text = withContext(Dispatchers.IO) { readText(uri) }
+            val eq = text?.let { EqProfile.parseApo(it) }
+            val current = profile()
+            if (eq == null || eq.filters.isEmpty() || current == null) {
+                _ui.value = _ui.value.copy(message = "EQ 파일에서 필터를 찾지 못했다 (Equalizer APO 형식이어야 한다)")
+                return@launch
+            }
+            app.earphones.update(current.copy(eqText = eq.toApoText(), importedEq = true))
+            _ui.value = _ui.value.copy(message = "가져온 EQ를 쓴다 (필터 ${eq.filters.size}개)")
+            refit()
+        }
+    }
+
+    /** Drops an imported EQ and fits one from the measurement and target again. */
+    fun autoFit() {
+        viewModelScope.launch { refit(force = true) }
+    }
+
     fun use() {
         app.settings.setActiveEarphone(id)
         app.settings.setEqEnabled(true)
@@ -96,41 +131,69 @@ class EarphoneViewModel(private val app: MmmApplication, private val id: String)
         }
     }
 
-    private fun edit(refit: Boolean = false, change: (EarphoneProfile) -> EarphoneProfile) {
+    private fun edit(thenRefit: Boolean = false, change: (EarphoneProfile) -> EarphoneProfile) {
         val current = profile() ?: return
         viewModelScope.launch {
             app.earphones.update(change(current))
-            if (refit) refit()
+            if (thenRefit) refit()
         }
     }
 
-    private suspend fun refit() {
+    /**
+     * Brings the graph and the stored EQ up to date. An imported EQ is shown against the current
+     * target but kept; [force] replaces it with a fitted one.
+     */
+    private suspend fun refit(force: Boolean = false) {
         val profile = profile() ?: return
         val measured = app.earphones.measurement(id)
-        val targetName = profile.targetName ?: app.earphones.targets.value.firstOrNull { "Harman" in it }
-            ?: app.earphones.targets.value.firstOrNull()
-        val rawTarget = targetName?.let { app.earphones.target(it) }
-        if (measured == null || rawTarget == null) {
+        val targets = app.earphones.targets.value
+        val targetName = profile.targetName ?: targets.firstOrNull { "Harman" in it } ?: targets.firstOrNull()
+        if (profile.targetName == null && targetName != null) {
+            app.earphones.update(profile.copy(targetName = targetName))
+        }
+        val target = targetName?.let { app.earphones.target(it) }?.tilted(profile.tiltDbPerOctave)
+        val shownMeasured = measured?.smooth(12)?.normalized()
+        val shownTarget = target?.normalized()
+
+        val imported = profile.eq?.takeIf { profile.importedEq && !force }
+        if (imported != null) {
             _ui.value = _ui.value.copy(
-                measured = measured?.smooth(12)?.normalized(),
-                target = rawTarget?.normalized(),
-                fit = null,
+                busy = null,
+                measured = shownMeasured,
+                target = shownTarget,
+                predicted = measured?.let { (it.smooth(12) + imported.response()).normalized() },
+                eq = imported,
+                rmsBeforeDb = null,
+                rmsAfterDb = null,
+                imported = true,
             )
             return
         }
-        if (profile.targetName == null) app.earphones.update(profile.copy(targetName = targetName))
+        if (measured == null || target == null) {
+            _ui.value = _ui.value.copy(
+                measured = shownMeasured,
+                target = shownTarget,
+                predicted = null,
+                eq = null,
+                imported = false,
+            )
+            return
+        }
 
         _ui.value = _ui.value.copy(busy = "EQ를 계산하는 중")
-        val target = rawTarget.tilted(profile.tiltDbPerOctave)
         val settings = if (profile.fullRange) PeqFitSettings.FULL_RANGE else PeqFitSettings.DEFAULT
         val fit = withContext(Dispatchers.Default) { PeqFitter(settings).fit(measured, target) }
         // Kept straight away: the EQ in use is always the one on screen.
-        app.earphones.update((profile() ?: profile).copy(eqText = fit.profile.toApoText()))
+        app.earphones.update((profile() ?: profile).copy(eqText = fit.profile.toApoText(), importedEq = false))
         _ui.value = _ui.value.copy(
             busy = null,
-            measured = measured.smooth(12).normalized(),
-            target = target.normalized(),
-            fit = fit,
+            measured = shownMeasured,
+            target = shownTarget,
+            predicted = fit.predicted,
+            eq = fit.profile,
+            rmsBeforeDb = fit.rmsBeforeDb,
+            rmsAfterDb = fit.rmsAfterDb,
+            imported = false,
         )
     }
 

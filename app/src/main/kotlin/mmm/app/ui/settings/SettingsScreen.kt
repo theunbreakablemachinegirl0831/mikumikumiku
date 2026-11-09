@@ -27,8 +27,10 @@ import mmm.app.ui.theme.ScreenHeader
 import kotlin.math.roundToInt
 
 @Composable
-fun SettingsScreen(app: MmmApplication, onBack: () -> Unit) {
+fun SettingsScreen(app: MmmApplication, onBack: () -> Unit, onOpenEarphones: () -> Unit) {
     val settings by app.settings.settings.collectAsStateWithLifecycle()
+    val earphones by app.earphones.earphones.collectAsStateWithLifecycle()
+    val active = earphones.firstOrNull { it.id == settings.activeEarphoneId }
 
     Scaffold { padding ->
         Column(
@@ -40,6 +42,21 @@ fun SettingsScreen(app: MmmApplication, onBack: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             ScreenHeader(title = "설정", onBack = onBack)
+
+            Card(onClick = onOpenEarphones, modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("이어폰 보정", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        when {
+                            active == null -> "고른 이어폰 없음 - 눌러서 측정치로 EQ를 만든다"
+                            !settings.eqEnabled -> "${active.name} · EQ 꺼짐"
+                            active.eqText == null -> "${active.name} · 아직 EQ 없음"
+                            else -> "${active.name} · EQ 켜짐"
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+            }
 
             Card {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {

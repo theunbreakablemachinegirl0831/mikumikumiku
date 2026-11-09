@@ -6,6 +6,8 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import mmm.app.ui.earphone.EarphoneScreen
+import mmm.app.ui.earphone.EarphonesScreen
 import mmm.app.ui.exercise.ExerciseScreen
 import mmm.app.ui.home.HomeScreen
 import mmm.app.ui.live.LiveScreen
@@ -19,6 +21,10 @@ private object Routes {
     const val PROGRESS = "progress"
     const val SETTINGS = "settings"
     const val LIVE = "live"
+    const val EARPHONES = "earphones"
+    const val EARPHONE = "earphone/{id}"
+
+    fun earphone(id: String) = "earphone/$id"
 
     fun exercise(family: ExerciseFamily, live: Boolean = false) = "exercise/${family.id}?live=$live"
 }
@@ -35,6 +41,7 @@ fun MmmApp(app: MmmApplication) {
                 onOpenProgress = { nav.navigate(Routes.PROGRESS) },
                 onOpenSettings = { nav.navigate(Routes.SETTINGS) },
                 onOpenLive = { nav.navigate(Routes.LIVE) },
+                onOpenEarphones = { nav.navigate(Routes.EARPHONES) },
             )
         }
         composable(
@@ -63,7 +70,24 @@ fun MmmApp(app: MmmApplication) {
             ProgressScreen(app = app, onBack = { nav.popBackStack() })
         }
         composable(Routes.SETTINGS) {
-            SettingsScreen(app = app, onBack = { nav.popBackStack() })
+            SettingsScreen(
+                app = app,
+                onBack = { nav.popBackStack() },
+                onOpenEarphones = { nav.navigate(Routes.EARPHONES) },
+            )
+        }
+        composable(Routes.EARPHONES) {
+            EarphonesScreen(
+                app = app,
+                onBack = { nav.popBackStack() },
+                onOpen = { nav.navigate(Routes.earphone(it)) },
+            )
+        }
+        composable(
+            route = Routes.EARPHONE,
+            arguments = listOf(navArgument("id") { type = NavType.StringType }),
+        ) { entry ->
+            EarphoneScreen(app = app, id = entry.arguments?.getString("id").orEmpty(), onBack = { nav.popBackStack() })
         }
     }
 }
