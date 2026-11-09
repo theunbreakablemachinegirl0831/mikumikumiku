@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import mmm.app.audiometry.AudiogramStore
 import mmm.app.data.DataStoreProgressStore
 import mmm.app.data.EarphoneRepository
 import mmm.eq.EqProfile
@@ -40,6 +41,8 @@ class MmmApplication : Application() {
     }
 
     val earphones: EarphoneRepository by lazy { EarphoneRepository(applicationContext, appScope) }
+
+    val audiograms: AudiogramStore by lazy { AudiogramStore(applicationContext) }
 
     /**
      * The EQ every playback path applies: the active earphone's, when EQ is on and one has been

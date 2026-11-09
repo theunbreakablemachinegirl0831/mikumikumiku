@@ -45,6 +45,7 @@ fun HomeScreen(
     onOpenSettings: () -> Unit,
     onOpenLive: () -> Unit,
     onOpenEarphones: () -> Unit,
+    onOpenAudiometry: () -> Unit,
 ) {
     val progress by app.progress.progress.collectAsStateWithLifecycle()
     val settings by app.settings.settings.collectAsStateWithLifecycle()
@@ -108,6 +109,7 @@ fun HomeScreen(
             LiveModeCard(onClick = onOpenLive)
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = onOpenAudiometry) { Text("청력 검사") }
                 OutlinedButton(onClick = onOpenProgress) { Text("진행도") }
                 OutlinedButton(onClick = onOpenSettings) { Text("설정") }
             }
