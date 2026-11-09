@@ -24,6 +24,9 @@ data class Track(
     fun toMediaItem(): MediaItem = MediaItem.Builder()
         .setMediaId(id.toString())
         .setUri(uri)
+        // Carried separately as well: the session resolves from it if the URI does not survive
+        // the trip from controller to session.
+        .setRequestMetadata(MediaItem.RequestMetadata.Builder().setMediaUri(uri).build())
         .setMediaMetadata(
             MediaMetadata.Builder()
                 .setTitle(title)

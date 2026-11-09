@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
@@ -41,6 +42,8 @@ data class PlayerUiState(
     val repeatMode: Int = Player.REPEAT_MODE_OFF,
     val queue: List<String> = emptyList(),
     val queueIndex: Int = -1,
+    /** Why the last thing asked of the player did not happen, in words the listener can act on. */
+    val error: String? = null,
 ) {
     val filtered: List<Track>
         get() {
@@ -68,18 +71,16 @@ class PlayerViewModel(private val app: MmmApplication) : ViewModel() {
 
     private val listener = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) = publish(player)
+
+        override fun onPlayerError(error: PlaybackException) {
+            _ui.value = _ui.value.copy(error = "재생 오류: ${error.errorCodeName} - ${error.message ?: ""}")
+        }
     }
 
+    private var connecting = false
+
     init {
-        val token = SessionToken(app, ComponentName(app, PlaybackService::class.java))
-        val future = MediaController.Builder(app, token).buildAsync()
-        future.addListener({
-            val built = runCatching { future.get() }.getOrNull() ?: return@addListener
-            controller = built
-            built.addListener(listener)
-            publish(built)
-            _ui.value = _ui.value.copy(connected = true)
-        }, ContextCompat.getMainExecutor(app))
+        connect()
 
         viewModelScope.launch {
             // Position is not an event; it is polled while the screen is up.
@@ -108,9 +109,41 @@ class PlayerViewModel(private val app: MmmApplication) : ViewModel() {
         _ui.value = _ui.value.copy(query = query)
     }
 
+    /** Connects to the playback service; a failure is shown rather than swallowed. */
+    fun connect() {
+        if (controller != null || connecting) return
+        connecting = true
+        val token = SessionToken(app, ComponentName(app, PlaybackService::class.java))
+        val future = MediaController.Builder(app, token).buildAsync()
+        future.addListener({
+            connecting = false
+            runCatching { future.get() }
+                .onSuccess { built ->
+                    controller = built
+                    built.addListener(listener)
+                    publish(built)
+                    _ui.value = _ui.value.copy(connected = true, error = null)
+                }
+                .onFailure { e ->
+                    val cause = (e as? java.util.concurrent.ExecutionException)?.cause ?: e
+                    _ui.value = _ui.value.copy(
+                        connected = false,
+                        error = "재생 서비스에 연결하지 못했다: ${cause.message ?: cause::class.simpleName}",
+                    )
+                }
+        }, ContextCompat.getMainExecutor(app))
+    }
+
     /** Plays [list] as the queue, starting from [start]. */
     fun play(list: List<Track>, start: Int) {
-        val c = controller ?: return
+        if (list.isEmpty()) return
+        val c = controller
+        if (c == null) {
+            _ui.value = _ui.value.copy(error = "재생 서비스에 아직 연결되지 않았다. 다시 연결하는 중이다.")
+            connect()
+            return
+        }
+        _ui.value = _ui.value.copy(error = null)
         c.setMediaItems(list.map(Track::toMediaItem), start.coerceIn(list.indices), 0L)
         c.prepare()
         c.play()

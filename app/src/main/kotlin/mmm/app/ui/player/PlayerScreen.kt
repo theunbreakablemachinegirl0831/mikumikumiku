@@ -19,6 +19,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledIconButton
@@ -87,6 +88,17 @@ fun PlayerScreen(app: MmmApplication, onBack: () -> Unit) {
     Scaffold { padding ->
         Column(Modifier.padding(padding).fillMaxSize()) {
             Box(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) { ScreenHeader(title = "플레이어", onBack = onBack) }
+            ui.error?.let { message ->
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp).fillMaxWidth(),
+                ) {
+                    Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(message, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
+                        if (!ui.connected) TextButton(onClick = vm::connect) { Text("다시 연결") }
+                    }
+                }
+            }
             TabRow(selectedTabIndex = tab) {
                 listOf("재생 중", "곡", "재생목록").forEachIndexed { index, label ->
                     Tab(selected = tab == index, onClick = { tab = index }, text = { Text(label) })

@@ -7,8 +7,8 @@ plugins {
 // One place for the version, because it appears in two: the launcher label and the screen header.
 // Builds reach the phone as CI artifacts rather than through a store, so which one is installed is
 // otherwise a guess.
-val appVersionName = "0.5"
-val appVersionCode = 5
+val appVersionName = "0.5.1"
+val appVersionCode = 6
 
 android {
     namespace = "mmm.app"
