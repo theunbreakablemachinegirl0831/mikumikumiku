@@ -25,6 +25,10 @@ include(":core:training")
 // unit-tested here rather than discovered to be wrong on a phone with a DAC attached.
 include(":core:usb")
 
+// Earphone measurements, target curves and automatic parametric EQ. Pure maths over frequency
+// responses, so the fitter is tested here against curves with known answers.
+include(":core:eq")
+
 // The Android side is only configured when an SDK is actually present, so that
 // `gradle :core:dsp:test` works in a bare JDK container.
 val androidSdkPresent =

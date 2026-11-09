@@ -24,7 +24,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
 
       - name: Run core tests
-        run: ./gradlew :core:dsp:test :core:training:test :core:usb:test --stacktrace
+        run: ./gradlew :core:dsp:test :core:training:test :core:usb:test :core:eq:test --stacktrace
 
       - name: Upload test reports
         if: always()
@@ -35,6 +35,7 @@ jobs:
             core/dsp/build/reports/tests/test
             core/training/build/reports/tests/test
             core/usb/build/reports/tests/test
+            core/eq/build/reports/tests/test
 
   # The trainer itself. This is the APK to install for practice; the diagnostics one below is only
   # for the live-audio measurements.

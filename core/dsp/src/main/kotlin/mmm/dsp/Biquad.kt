@@ -105,6 +105,47 @@ public object BiquadDesign {
         )
     }
 
+    /**
+     * Low shelf specified by Q rather than slope, as Equalizer APO and AutoEq write it
+     * (`LSC Fc 105 Hz Gain 3 dB Q 0.7`), so an imported or exported EQ means the same thing here.
+     */
+    public fun lowShelfQ(frequency: Double, q: Double, gainDb: Double, sampleRate: Int): BiquadCoefficients {
+        if (gainDb == 0.0) return BiquadCoefficients.IDENTITY
+        val f = clampFreq(frequency, sampleRate)
+        val a = 10.0.pow(gainDb / 40.0)
+        val w0 = 2.0 * PI * f / sampleRate
+        val cw = cos(w0)
+        val alpha = sin(w0) / (2.0 * q.coerceIn(MIN_Q, MAX_Q))
+        val twoSqrtAAlpha = 2 * sqrt(a) * alpha
+        val a0 = (a + 1) + (a - 1) * cw + twoSqrtAAlpha
+        return BiquadCoefficients(
+            b0 = a * ((a + 1) - (a - 1) * cw + twoSqrtAAlpha) / a0,
+            b1 = 2 * a * ((a - 1) - (a + 1) * cw) / a0,
+            b2 = a * ((a + 1) - (a - 1) * cw - twoSqrtAAlpha) / a0,
+            a1 = -2 * ((a - 1) + (a + 1) * cw) / a0,
+            a2 = ((a + 1) + (a - 1) * cw - twoSqrtAAlpha) / a0,
+        )
+    }
+
+    /** High shelf specified by Q; see [lowShelfQ]. */
+    public fun highShelfQ(frequency: Double, q: Double, gainDb: Double, sampleRate: Int): BiquadCoefficients {
+        if (gainDb == 0.0) return BiquadCoefficients.IDENTITY
+        val f = clampFreq(frequency, sampleRate)
+        val a = 10.0.pow(gainDb / 40.0)
+        val w0 = 2.0 * PI * f / sampleRate
+        val cw = cos(w0)
+        val alpha = sin(w0) / (2.0 * q.coerceIn(MIN_Q, MAX_Q))
+        val twoSqrtAAlpha = 2 * sqrt(a) * alpha
+        val a0 = (a + 1) - (a - 1) * cw + twoSqrtAAlpha
+        return BiquadCoefficients(
+            b0 = a * ((a + 1) + (a - 1) * cw + twoSqrtAAlpha) / a0,
+            b1 = -2 * a * ((a - 1) + (a + 1) * cw) / a0,
+            b2 = a * ((a + 1) + (a - 1) * cw - twoSqrtAAlpha) / a0,
+            a1 = 2 * ((a - 1) - (a + 1) * cw) / a0,
+            a2 = ((a + 1) - (a - 1) * cw - twoSqrtAAlpha) / a0,
+        )
+    }
+
     public fun lowPass(frequency: Double, q: Double, sampleRate: Int): BiquadCoefficients {
         val f = clampFreq(frequency, sampleRate)
         val w0 = 2.0 * PI * f / sampleRate
