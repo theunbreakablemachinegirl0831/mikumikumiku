@@ -37,16 +37,18 @@ import mmm.app.data.FamilyProgress
 import mmm.app.data.SourceChoice
 import mmm.app.data.TrainerSettings
 import mmm.app.ui.home.PracticeRangeCard
-import mmm.app.ui.theme.FilterChip
-import mmm.app.ui.theme.GlassButton
-import mmm.app.ui.theme.GroupCard
-import mmm.app.ui.theme.GroupDivider
-import mmm.app.ui.theme.ScreenHeader
-import mmm.app.ui.theme.SectionHeader
-import mmm.app.ui.theme.SettingRow
-import mmm.app.ui.theme.Switch
-import mmm.app.ui.theme.WhiteSlider
-import mmm.app.ui.theme.glass
+import mmm.app.ui.components.glass.FilterChip
+import mmm.app.ui.components.glass.GlassButton
+import mmm.app.ui.components.glass.GroupCard
+import mmm.app.ui.components.glass.GroupDivider
+import mmm.app.ui.components.glass.GlassTopBar
+import mmm.app.ui.components.glass.SectionHeader
+import mmm.app.ui.components.glass.SettingRow
+import mmm.app.ui.components.glass.Switch
+import mmm.app.ui.components.glass.GlassSlider
+import mmm.app.ui.components.glass.GlassLevel
+import mmm.app.ui.components.glass.GlassProgressBar
+import mmm.app.ui.components.glass.glass
 import mmm.training.Curriculum
 import mmm.training.ExerciseFamily
 import mmm.training.PracticeFocus
@@ -81,14 +83,14 @@ fun TrainingSetupScreen(app: MmmApplication, family: ExerciseFamily, onBack: () 
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        ScreenHeader(title = family.displayName, onBack = onBack, subtitle = family.skill)
+        GlassTopBar(title = family.displayName, onBack = onBack, subtitle = family.skill)
 
         Row(
             Modifier.fillMaxWidth().glass().padding(16.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Box(Modifier.size(48.dp).glass(CircleShape, strong = true), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(48.dp).glass(CircleShape, level = GlassLevel.Regular), contentAlignment = Alignment.Center) {
                 Icon(iconFor(family), contentDescription = null, modifier = Modifier.size(26.dp))
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -97,12 +99,9 @@ fun TrainingSetupScreen(app: MmmApplication, family: ExerciseFamily, onBack: () 
                     if (own.trials > 0) "지금까지 ${own.trials}문제 · 정답률 ${(own.accuracy * 100).toInt()}%" else "아직 푼 문제가 없다",
                     style = MaterialTheme.typography.bodySmall,
                 )
-                LinearProgressIndicator(
+                GlassProgressBar(
                     progress = { (level + 1).toFloat() / levels.size },
                     modifier = Modifier.fillMaxWidth().height(4.dp),
-                    color = Color.White,
-                    trackColor = Color.White.copy(alpha = 0.15f),
-                    strokeCap = StrokeCap.Round,
                 )
             }
         }
@@ -151,7 +150,7 @@ fun TrainingSetupScreen(app: MmmApplication, family: ExerciseFamily, onBack: () 
                     Text("${settings.excerptSeconds}초", style = MaterialTheme.typography.bodyLarge)
                 }
                 val range = TrainerSettings.EXCERPT_RANGE
-                WhiteSlider(
+                GlassSlider(
                     value = settings.excerptSeconds.toFloat(),
                     onValueChange = { app.settings.setExcerptSeconds(it.roundToInt()) },
                     valueRange = range.first.toFloat()..range.last.toFloat(),
@@ -194,7 +193,7 @@ private fun FilterCard(settings: TrainerSettings, app: MmmApplication) {
                 val min = TrainerSettings.GAIN_MIN_DB
                 val max = TrainerSettings.GAIN_MAX_DB
                 val step = TrainerSettings.GAIN_STEP_DB
-                WhiteSlider(
+                GlassSlider(
                     value = gain.toFloat(),
                     // Snapped to the step, so the stored value is one the label can show exactly.
                     onValueChange = { v -> app.settings.setFilterGain((v / step).roundToInt() * step) },
@@ -213,7 +212,7 @@ private fun FilterCard(settings: TrainerSettings, app: MmmApplication) {
             if (q != null) {
                 val values = TrainerSettings.Q_VALUES
                 val index = values.indexOfFirst { it >= q }.let { if (it < 0) values.lastIndex else it }
-                WhiteSlider(
+                GlassSlider(
                     value = index.toFloat(),
                     onValueChange = { v -> app.settings.setFilterQ(values[v.roundToInt().coerceIn(values.indices)]) },
                     valueRange = 0f..values.lastIndex.toFloat(),

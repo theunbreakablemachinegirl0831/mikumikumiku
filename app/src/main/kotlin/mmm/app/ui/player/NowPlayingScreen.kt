@@ -35,16 +35,13 @@ import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.VolumeMute
 import androidx.compose.material.icons.rounded.VolumeUp
-import androidx.compose.material3.DropdownMenu
+import mmm.app.ui.components.glass.GlassMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -80,9 +77,11 @@ import mmm.app.player.LibraryRepository
 import mmm.app.player.NowPlaying
 import mmm.app.player.PlaybackFormat
 import mmm.app.player.PlaybackService
-import mmm.app.ui.theme.Glass
-import mmm.app.ui.theme.WhiteSlider
-import mmm.app.ui.theme.glass
+import mmm.app.ui.components.glass.GlassBottomSheet
+import mmm.app.ui.theme.GlassTheme
+import mmm.app.ui.theme.GlassShapes
+import mmm.app.ui.components.glass.GlassSlider
+import mmm.app.ui.components.glass.glass
 import mmm.app.ui.visual.PlayerSpectrumSource
 import mmm.app.ui.visual.SpectrumSource
 import mmm.app.ui.visual.drawSpectrum
@@ -98,7 +97,6 @@ import kotlin.math.roundToInt
  *   drawn by the shell, flying between here and the mini player, and this one stays hidden
  * @param onArtBounds where the artwork sits, so the shell knows where to fly it to
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NowPlayingScreen(
     app: MmmApplication,
@@ -114,6 +112,7 @@ fun NowPlayingScreen(
     val profile by app.eq.profile.collectAsStateWithLifecycle()
     val format by PlaybackService.format.collectAsStateWithLifecycle()
     val report by app.live.usb.report.collectAsStateWithLifecycle()
+    val colors = GlassTheme.colors
     var menu by remember { mutableStateOf(false) }
     var queue by remember { mutableStateOf(false) }
     val favorite = now.trackId != null && now.trackId in library.favorites
@@ -186,18 +185,18 @@ fun NowPlayingScreen(
                 Icon(
                     if (now.repeatMode == Player.REPEAT_MODE_ONE) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat,
                     contentDescription = "반복",
-                    tint = if (now.repeatMode == Player.REPEAT_MODE_OFF) Color.White.copy(alpha = 0.45f) else Color.White,
+                    tint = if (now.repeatMode == Player.REPEAT_MODE_OFF) colors.ink.copy(alpha = 0.45f) else colors.ink,
                 )
             }
             IconButton(onClick = app.player::toggleShuffle) {
-                Icon(Icons.Rounded.Shuffle, contentDescription = "셔플", tint = if (now.shuffle) Color.White else Color.White.copy(alpha = 0.45f))
+                Icon(Icons.Rounded.Shuffle, contentDescription = "셔플", tint = if (now.shuffle) colors.ink else colors.ink.copy(alpha = 0.45f))
             }
             IconButton(onClick = onOpenEq) {
-                Icon(Icons.Rounded.Tune, contentDescription = "재생 EQ", tint = if (eq.enabled && profile != null) Color.White else Color.White.copy(alpha = 0.45f))
+                Icon(Icons.Rounded.Tune, contentDescription = "재생 EQ", tint = if (eq.enabled && profile != null) colors.ink else colors.ink.copy(alpha = 0.45f))
             }
             Box {
                 IconButton(onClick = { menu = true }) { Icon(Icons.Rounded.MoreHoriz, contentDescription = "더 보기") }
-                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                GlassMenu(expanded = menu, onDismissRequest = { menu = false }) {
                     DropdownMenuItem(
                         text = { Text("대기열 보기") },
                         enabled = now.queue.isNotEmpty(),
@@ -231,20 +230,15 @@ fun NowPlayingScreen(
                     else -> formatLine(format, processed = profile != null || (eq.enabled && eq.tubeEnabled))
                 },
                 style = MaterialTheme.typography.labelMedium,
-                color = Color.White.copy(alpha = 0.75f),
+                color = colors.ink.copy(alpha = 0.75f),
                 textAlign = TextAlign.Center,
-                modifier = Modifier.glass(RoundedCornerShape(14.dp)).padding(horizontal = 16.dp, vertical = 8.dp),
+                modifier = Modifier.glass(GlassShapes.chip).padding(horizontal = 16.dp, vertical = 8.dp),
             )
         }
     }
 
     if (queue) {
-        ModalBottomSheet(
-            onDismissRequest = { queue = false },
-            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-            containerColor = Color(0xFF1E1D25),
-            contentColor = Color.White,
-        ) {
+        GlassBottomSheet(onDismiss = { queue = false }) {
             Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).navigationBarsPadding().padding(bottom = 16.dp)) {
                 Text("대기열", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
                 now.queue.forEachIndexed { index, title ->
@@ -256,7 +250,7 @@ fun NowPlayingScreen(
                             .clickable { app.player.skipTo(index) }
                             .padding(horizontal = 20.dp, vertical = 12.dp),
                         fontWeight = if (current) FontWeight.Bold else FontWeight.Normal,
-                        color = if (current) MaterialTheme.colorScheme.tertiary else Color.White,
+                        color = if (current) MaterialTheme.colorScheme.tertiary else colors.ink,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -311,11 +305,12 @@ fun ArtWithSpectrum(
 /** The position slider with the times under it and, between them, what kind of file it is. */
 @Composable
 fun SeekBar(positionMs: Long, durationMs: Long, badge: String?, onSeek: (Long) -> Unit) {
+    val colors = GlassTheme.colors
     var dragging by remember { mutableStateOf(false) }
     var dragValue by remember { mutableFloatStateOf(0f) }
     val duration = durationMs.coerceAtLeast(1)
     Column {
-        WhiteSlider(
+        GlassSlider(
             value = if (dragging) dragValue else (positionMs.toFloat() / duration).coerceIn(0f, 1f),
             onValueChange = {
                 dragging = true
@@ -330,7 +325,7 @@ fun SeekBar(positionMs: Long, durationMs: Long, badge: String?, onSeek: (Long) -
             Text(
                 time(if (dragging) (dragValue * duration).toLong() else positionMs),
                 style = MaterialTheme.typography.labelLarge,
-                color = Color.White.copy(alpha = 0.7f),
+                color = colors.ink.copy(alpha = 0.7f),
                 modifier = Modifier.align(Alignment.CenterStart),
             )
             if (badge != null) {
@@ -338,14 +333,14 @@ fun SeekBar(positionMs: Long, durationMs: Long, badge: String?, onSeek: (Long) -
                     badge,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color.White.copy(alpha = 0.85f),
+                    color = colors.ink.copy(alpha = 0.85f),
                     modifier = Modifier.align(Alignment.Center).glass(RoundedCornerShape(6.dp)).padding(horizontal = 8.dp, vertical = 2.dp),
                 )
             }
             Text(
                 time(durationMs),
                 style = MaterialTheme.typography.labelLarge,
-                color = Color.White.copy(alpha = 0.7f),
+                color = colors.ink.copy(alpha = 0.7f),
                 modifier = Modifier.align(Alignment.CenterEnd),
             )
         }
@@ -377,6 +372,7 @@ fun Transport(playing: Boolean, onPrevious: () -> Unit, onToggle: () -> Unit, on
 /** The phone's media volume, which is what the hardware keys move too. */
 @Composable
 fun VolumeRow() {
+    val colors = GlassTheme.colors
     val context = LocalContext.current
     val audio = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
     val max = remember { audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1) }
@@ -389,8 +385,8 @@ fun VolumeRow() {
         }
     }
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Icon(Icons.Rounded.VolumeMute, contentDescription = null, modifier = Modifier.size(22.dp), tint = Color.White.copy(alpha = 0.8f))
-        WhiteSlider(
+        Icon(Icons.Rounded.VolumeMute, contentDescription = null, modifier = Modifier.size(22.dp), tint = colors.ink.copy(alpha = 0.8f))
+        GlassSlider(
             value = volume.toFloat(),
             onValueChange = { v ->
                 val next = v.roundToInt()
@@ -402,7 +398,7 @@ fun VolumeRow() {
             valueRange = 0f..max.toFloat(),
             modifier = Modifier.weight(1f),
         )
-        Icon(Icons.Rounded.VolumeUp, contentDescription = null, modifier = Modifier.size(22.dp), tint = Color.White.copy(alpha = 0.8f))
+        Icon(Icons.Rounded.VolumeUp, contentDescription = null, modifier = Modifier.size(22.dp), tint = colors.ink.copy(alpha = 0.8f))
     }
 }
 

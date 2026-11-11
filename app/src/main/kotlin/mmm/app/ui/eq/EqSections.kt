@@ -29,10 +29,11 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import mmm.app.data.PlaybackEq
-import mmm.app.ui.theme.FilterChip
-import mmm.app.ui.theme.GlassButton
-import mmm.app.ui.theme.PillTabs
-import mmm.app.ui.theme.glass
+import mmm.app.ui.theme.GlassTheme
+import mmm.app.ui.components.glass.FilterChip
+import mmm.app.ui.components.glass.GlassButton
+import mmm.app.ui.components.glass.PillTabs
+import mmm.app.ui.components.glass.glass
 import mmm.dsp.artifacts.TubeBand
 import mmm.eq.EqProfile
 import mmm.eq.GraphicEq
@@ -103,6 +104,7 @@ internal fun GeqSection(state: PlaybackEq, update: ((PlaybackEq) -> PlaybackEq) 
  */
 @Composable
 private fun Fader(value: Double, onChange: (Double) -> Unit) {
+    val ink = GlassTheme.colors.ink
     val current by rememberUpdatedState(value)
     val change by rememberUpdatedState(onChange)
     Canvas(
@@ -133,19 +135,19 @@ private fun Fader(value: Double, onChange: (Double) -> Unit) {
         val y = middle - (value / FADER_RANGE_DB).toFloat() * middle
         val track = 4f * density
         drawRoundRect(
-            Color.White.copy(alpha = 0.16f),
+            ink.copy(alpha = 0.16f),
             topLeft = Offset(x - track / 2, 0f),
             size = Size(track, size.height),
             cornerRadius = CornerRadius(track / 2),
         )
-        drawLine(Color.White.copy(alpha = 0.3f), Offset(x - 9f * density, middle), Offset(x + 9f * density, middle), 1f * density)
+        drawLine(ink.copy(alpha = 0.3f), Offset(x - 9f * density, middle), Offset(x + 9f * density, middle), 1f * density)
         drawRoundRect(
-            Color.White,
+            ink,
             topLeft = Offset(x - track / 2, minOf(y, middle)),
             size = Size(track, kotlin.math.abs(y - middle)),
             cornerRadius = CornerRadius(track / 2),
         )
-        drawCircle(Color.White, 9f * density, Offset(x, y.coerceIn(9f * density, size.height - 9f * density)))
+        drawCircle(ink, 9f * density, Offset(x, y.coerceIn(9f * density, size.height - 9f * density)))
     }
 }
 

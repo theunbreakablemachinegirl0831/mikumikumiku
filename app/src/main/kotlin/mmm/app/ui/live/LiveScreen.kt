@@ -15,12 +15,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import mmm.app.ui.theme.Card
+import mmm.app.ui.components.glass.Button
+import mmm.app.ui.components.glass.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.FilledTonalButton
+import mmm.app.ui.components.glass.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import mmm.app.ui.components.glass.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -37,7 +37,7 @@ import mmm.app.data.EarphoneConnection
 import mmm.app.live.LiveOutput
 import mmm.app.live.LiveSession
 import mmm.app.live.LiveStatus
-import mmm.app.ui.theme.ScreenHeader
+import mmm.app.ui.components.glass.GlassTopBar
 import mmm.source.capture.CaptureState
 import mmm.source.usb.UsbAudioReport
 import mmm.training.Curriculum
@@ -101,7 +101,7 @@ fun LiveScreen(app: MmmApplication, onBack: () -> Unit, onOpenFamily: (ExerciseF
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            ScreenHeader(title = "실시간 모드", onBack = onBack)
+            GlassTopBar(title = "실시간 모드", onBack = onBack)
             Text(
                 "Spotify 등에서 재생 중인 음악을 가로채 USB DAC으로만 내보내고, 거기에 과제의 처리를 건다. " +
                     "DAC을 점유하면 다른 앱의 원래 소리는 폰 스피커로 밀려나므로, 폰 볼륨은 줄여 둔다.",

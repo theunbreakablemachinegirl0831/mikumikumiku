@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import mmm.app.ui.theme.ThemeMode
 import mmm.training.FilterOverrides
 import mmm.training.FrequencyRange
 import kotlin.math.asinh
@@ -56,6 +57,9 @@ data class TrainerSettings(
     val visualizerPoints: Int = DEFAULT_VISUALIZER_POINTS,
     /** Draw the spectrum over the album art. */
     val artVisualizer: Boolean = true,
+    val themeMode: ThemeMode = ThemeMode.SYSTEM,
+    /** Blur what is behind floating glass, where the device can (Android 12 and later). */
+    val backdropBlur: Boolean = true,
 ) {
     fun filterOverrides(): FilterOverrides = FilterOverrides(gainDb = filterGainDb, q = filterQ)
 
@@ -136,6 +140,10 @@ class SettingsRepository(
 
     fun setArtVisualizer(on: Boolean) = update { it[ART_VISUALIZER] = on }
 
+    fun setThemeMode(mode: ThemeMode) = update { it[THEME_MODE] = mode.name }
+
+    fun setBackdropBlur(on: Boolean) = update { it[BACKDROP_BLUR] = on }
+
     fun setPracticeRange(range: FrequencyRange?) = update { prefs ->
         if (range == null) {
             prefs.remove(RANGE_LOW)
@@ -189,6 +197,8 @@ class SettingsRepository(
             visualizerPoints = prefs[VISUALIZER_POINTS]?.takeIf { it in TrainerSettings.VISUALIZER_POINTS }
                 ?: TrainerSettings.DEFAULT_VISUALIZER_POINTS,
             artVisualizer = prefs[ART_VISUALIZER] ?: true,
+            themeMode = prefs[THEME_MODE]?.let { name -> ThemeMode.entries.firstOrNull { it.name == name } } ?: ThemeMode.SYSTEM,
+            backdropBlur = prefs[BACKDROP_BLUR] ?: true,
         )
     }
 
@@ -204,6 +214,8 @@ class SettingsRepository(
         val HUB_CARDS = booleanPreferencesKey("settings_hub_cards")
         val VISUALIZER_POINTS = intPreferencesKey("settings_visualizer_points")
         val ART_VISUALIZER = booleanPreferencesKey("settings_art_visualizer")
+        val THEME_MODE = stringPreferencesKey("settings_theme_mode")
+        val BACKDROP_BLUR = booleanPreferencesKey("settings_backdrop_blur")
         val RANGE_LOW = doublePreferencesKey("settings_range_low")
         val RANGE_HIGH = doublePreferencesKey("settings_range_high")
         const val KIND_PINK = "pink"

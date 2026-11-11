@@ -17,17 +17,17 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
+import mmm.app.ui.components.glass.Button
 import androidx.compose.material3.ButtonDefaults
-import mmm.app.ui.theme.Card
+import mmm.app.ui.components.glass.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilledTonalButton
+import mmm.app.ui.components.glass.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import mmm.app.ui.components.glass.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import mmm.app.ui.components.glass.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -40,7 +40,7 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import mmm.app.MmmApplication
-import mmm.app.ui.theme.ScreenHeader
+import mmm.app.ui.components.glass.GlassTopBar
 import mmm.training.Curriculum
 import mmm.training.ExerciseFamily
 import mmm.training.Question
@@ -67,7 +67,7 @@ fun ExerciseScreen(app: MmmApplication, family: ExerciseFamily, live: Boolean, o
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            ScreenHeader(
+            GlassTopBar(
                 title = family.displayName,
                 onBack = onBack,
                 subtitle = if (state.question != null) {

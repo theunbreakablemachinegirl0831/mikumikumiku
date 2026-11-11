@@ -26,7 +26,7 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import mmm.app.data.PeqBand
-import mmm.app.ui.theme.OnWhite
+import mmm.app.ui.theme.GlassTheme
 import mmm.app.ui.visual.SpectrumState
 import mmm.app.ui.visual.drawSpectrum
 import mmm.eq.EqFilter
@@ -59,13 +59,17 @@ fun EqGraph(
     onSelectNode: (Int) -> Unit = {},
     onMoveNode: (index: Int, frequency: Double, gainDb: Double) -> Unit = { _, _, _ -> },
 ) {
+    val colors = GlassTheme.colors
+    val ink = colors.ink
+    val accent = colors.accent
+    val onAccent = colors.onAccent
     val totalCurve = remember(total) { EqProfile(total, 0.0).response(GRID).decibels }
     val layerCurve = remember(layer) { layer?.let { EqProfile(it, 0.0).response(GRID).decibels } }
     val measurer = rememberTextMeasurer()
     val currentNodes by rememberUpdatedState(nodes)
     val select by rememberUpdatedState(onSelectNode)
     val move by rememberUpdatedState(onMoveNode)
-    val labelStyle = TextStyle(color = Color.White.copy(alpha = 0.55f), fontSize = 11.sp)
+    val labelStyle = TextStyle(color = colors.inkMuted, fontSize = 11.sp)
 
     Canvas(
         modifier
@@ -95,7 +99,7 @@ fun EqGraph(
 
         for (db in listOf(12.0, 6.0, 0.0, -6.0, -12.0)) {
             val y = yOf(db, plot)
-            drawLine(Color.White.copy(alpha = if (db == 0.0) 0.28f else 0.10f), Offset(plot.left, y), Offset(plot.right, y), 1f)
+            drawLine(ink.copy(alpha = if (db == 0.0) 0.28f else 0.10f), Offset(plot.left, y), Offset(plot.right, y), 1f)
             if (db != 0.0) {
                 val text = measurer.measure((if (db > 0) "+" else "") + db.toInt(), labelStyle)
                 drawText(text, topLeft = Offset(plot.left - text.size.width - 6f * density, y - text.size.height / 2f))
@@ -104,7 +108,7 @@ fun EqGraph(
         for (f in GRID_LINES) {
             val x = xOf(f, plot)
             val decade = f == 100.0 || f == 1000.0 || f == 10000.0
-            drawLine(Color.White.copy(alpha = if (decade) 0.22f else 0.08f), Offset(x, plot.top), Offset(x, plot.bottom), 1f)
+            drawLine(ink.copy(alpha = if (decade) 0.22f else 0.08f), Offset(x, plot.top), Offset(x, plot.bottom), 1f)
         }
         for ((f, label) in listOf(100.0 to "100", 1000.0 to "1k", 10000.0 to "10k")) {
             val text = measurer.measure(label, labelStyle)
@@ -114,16 +118,16 @@ fun EqGraph(
         clipRect(plot.left, plot.top, plot.right, plot.bottom) {
             if (spectrum != null) {
                 spectrum.frame // read so the spectrum redraws every frame
-                drawSpectrum(spectrum.levels, plot, fillAlpha = 0.20f, lineAlpha = 0.35f, gain = 0.92f)
+                drawSpectrum(spectrum.levels, plot, color = ink, fillAlpha = 0.20f, lineAlpha = 0.35f, gain = 0.92f)
             }
 
-            if (layerCurve != null) drawPath(curve(layerCurve, plot), Color.White.copy(alpha = 0.3f), style = Stroke(1.5f * density))
+            if (layerCurve != null) drawPath(curve(layerCurve, plot), ink.copy(alpha = 0.3f), style = Stroke(1.5f * density))
 
             val line = curve(totalCurve, plot)
             val fill = curve(totalCurve, plot, closeAt = yOf(0.0, plot))
             val strength = if (active) 1f else 0.4f
-            drawPath(fill, Color.White.copy(alpha = 0.12f * strength))
-            drawPath(line, Color.White.copy(alpha = 0.95f * strength), style = Stroke(2.5f * density))
+            drawPath(fill, ink.copy(alpha = 0.12f * strength))
+            drawPath(line, ink.copy(alpha = 0.95f * strength), style = Stroke(2.5f * density))
         }
 
         nodes.forEachIndexed { index, band ->
@@ -132,16 +136,16 @@ fun EqGraph(
             val radius = (if (selected) 13f else 11f) * density
             drawCircle(
                 when {
-                    selected -> Color.White
-                    band.enabled -> Color(0xFF8E8E98)
-                    else -> Color(0xFF55555E)
+                    selected -> accent
+                    band.enabled -> HANDLE
+                    else -> HANDLE.copy(alpha = 0.45f)
                 },
                 radius,
                 centre,
             )
             val text = measurer.measure(
                 (index + 1).toString(),
-                TextStyle(color = if (selected) OnWhite else Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold),
+                TextStyle(color = if (selected) onAccent else Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold),
             )
             drawText(text, topLeft = centre - Offset(text.size.width / 2f, text.size.height / 2f))
         }
@@ -150,6 +154,9 @@ fun EqGraph(
 
 private val GRID: List<Double> = FrequencyResponse.logGrid(20.0, 20000.0, 24)
 private val GRID_LINES = listOf(30.0, 50.0, 100.0, 200.0, 500.0, 1000.0, 2000.0, 5000.0, 10000.0)
+
+/** A handle that is not selected: a mid grey that carries white numerals on either theme. */
+private val HANDLE = Color(0xFF8E8E98)
 
 private const val LOW_HZ = 20.0
 private const val HIGH_HZ = 20000.0

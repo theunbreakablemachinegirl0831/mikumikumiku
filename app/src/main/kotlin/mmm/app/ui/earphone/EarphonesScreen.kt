@@ -8,13 +8,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import mmm.app.ui.theme.Card
+import mmm.app.ui.components.glass.Button
+import mmm.app.ui.components.glass.Card
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import mmm.app.ui.components.glass.GlassTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
-import mmm.app.ui.theme.Switch
+import mmm.app.ui.components.glass.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -29,7 +29,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import mmm.app.MmmApplication
 import mmm.app.data.EarphoneProfile
-import mmm.app.ui.theme.ScreenHeader
+import mmm.app.ui.components.glass.GlassTopBar
 
 /** The listener's earphones: which one is in use, whether its EQ is on, and a way to add more. */
 @Composable
@@ -48,7 +48,7 @@ fun EarphonesScreen(app: MmmApplication, onBack: (() -> Unit)?, onOpen: (String)
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            ScreenHeader(title = "이어폰", onBack = onBack)
+            GlassTopBar(title = "이어폰", onBack = onBack)
             Text(
                 "이어폰마다 공개된 B&K 5128 측정치를 넣고 타깃을 고르면, 그 타깃에 맞추는 EQ를 만든다. " +
                     "고른 이어폰이 재생 EQ의 자동 EQ와 청력 검사의 기준이 된다.",
@@ -74,7 +74,7 @@ fun EarphonesScreen(app: MmmApplication, onBack: (() -> Unit)?, onOpen: (String)
             Card {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("직접 추가 (측정 파일을 가지고 있을 때)", style = MaterialTheme.typography.titleMedium)
-                    OutlinedTextField(
+                    GlassTextField(
                         value = newName,
                         onValueChange = { newName = it },
                         label = { Text("이름 (예: See Audio Bravo)") },

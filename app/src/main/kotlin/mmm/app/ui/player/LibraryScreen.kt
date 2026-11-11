@@ -34,14 +34,14 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Search
-import androidx.compose.material3.DropdownMenu
+import mmm.app.ui.components.glass.GlassMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import mmm.app.ui.components.glass.GlassTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import mmm.app.ui.components.glass.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -64,11 +64,13 @@ import mmm.app.player.LibraryRepository
 import mmm.app.player.LibraryState
 import mmm.app.player.NowPlaying
 import mmm.app.player.Track
-import mmm.app.ui.theme.Glass
-import mmm.app.ui.theme.LocalPanelInset
-import mmm.app.ui.theme.PillTabs
-import mmm.app.ui.theme.ScreenHeader
-import mmm.app.ui.theme.glass
+import mmm.app.ui.theme.GlassShapes
+import mmm.app.ui.components.glass.LocalPanelInset
+import mmm.app.ui.components.glass.PillTabs
+import mmm.app.ui.components.glass.GlassTopBar
+import mmm.app.ui.components.glass.GlassDialog
+import mmm.app.ui.components.glass.GlassLevel
+import mmm.app.ui.components.glass.glass
 import java.util.Locale
 
 private val TABS = listOf("곡", "앨범", "폴더", "재생목록")
@@ -232,12 +234,12 @@ private fun Songs(app: MmmApplication, library: LibraryState, now: NowPlaying) {
                 }) { Icon(Icons.Rounded.Search, contentDescription = "검색") }
             }
             AnimatedVisibility(searching, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
-                OutlinedTextField(
+                GlassTextField(
                     value = query,
                     onValueChange = { query = it },
                     placeholder = { Text("제목, 아티스트, 앨범") },
                     singleLine = true,
-                    shape = Glass.pill,
+                    shape = GlassShapes.pill,
                     modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
                 )
             }
@@ -270,11 +272,11 @@ private fun TrackList(
 ) {
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = LocalPanelInset.current)) {
         item {
-            ScreenHeader(title = title, onBack = onBack, subtitle = subtitle) {
+            GlassTopBar(title = title, onBack = onBack, subtitle = subtitle) {
                 IconButton(
                     onClick = { app.player.play(tracks, 0) },
                     enabled = tracks.isNotEmpty(),
-                    modifier = Modifier.glass(Glass.pill, strong = true),
+                    modifier = Modifier.glass(GlassShapes.pill, level = GlassLevel.Regular),
                 ) { Icon(Icons.Rounded.PlayArrow, contentDescription = "재생") }
             }
             if (tracks.isEmpty() && empty != null) Text(empty, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(8.dp))
@@ -293,12 +295,12 @@ private fun Playlists(app: MmmApplication, library: LibraryState, onOpen: (Strin
         item {
             Count("${library.playlists.size}개 재생목록")
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(
+                GlassTextField(
                     value = name,
                     onValueChange = { name = it },
                     placeholder = { Text("새 재생목록 이름") },
                     singleLine = true,
-                    shape = Glass.pill,
+                    shape = GlassShapes.pill,
                     modifier = Modifier.weight(1f),
                 )
                 IconButton(
@@ -307,12 +309,26 @@ private fun Playlists(app: MmmApplication, library: LibraryState, onOpen: (Strin
                         name = ""
                     },
                     enabled = usable,
-                    modifier = Modifier.glass(Glass.pill, strong = true),
+                    modifier = Modifier.glass(GlassShapes.pill, level = GlassLevel.Regular),
                 ) { Icon(Icons.Rounded.Add, contentDescription = "만들기") }
             }
         }
         items(library.playlists, key = { it.name }) { playlist ->
             var menu by remember { mutableStateOf(false) }
+            var deleting by remember { mutableStateOf(false) }
+            if (deleting) {
+                GlassDialog(
+                    title = "'${playlist.name}' 지우기",
+                    text = "재생목록만 지워지고 곡 파일은 그대로 남는다.",
+                    confirm = "지우기",
+                    danger = true,
+                    onConfirm = {
+                        deleting = false
+                        app.library.deletePlaylist(playlist.name)
+                    },
+                    onDismiss = { deleting = false },
+                )
+            }
             ListRow(
                 trackId = playlist.trackIds.firstOrNull(),
                 title = playlist.name,
@@ -321,12 +337,12 @@ private fun Playlists(app: MmmApplication, library: LibraryState, onOpen: (Strin
             ) {
                 Box {
                     IconButton(onClick = { menu = true }) { Icon(Icons.Rounded.MoreVert, contentDescription = "메뉴") }
-                    DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                    GlassMenu(expanded = menu, onDismissRequest = { menu = false }) {
                         DropdownMenuItem(
                             text = { Text("재생목록 지우기") },
                             onClick = {
                                 menu = false
-                                app.library.deletePlaylist(playlist.name)
+                                deleting = true
                             },
                         )
                     }
@@ -355,7 +371,7 @@ private fun TrackRow(
     ) {
         Box {
             IconButton(onClick = { menu = true }) { Icon(Icons.Rounded.MoreVert, contentDescription = "메뉴") }
-            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+            GlassMenu(expanded = menu, onDismissRequest = { menu = false }) {
                 DropdownMenuItem(
                     text = { Text(if (track.id in library.favorites) "즐겨찾기에서 빼기" else "즐겨찾기에 추가") },
                     onClick = {

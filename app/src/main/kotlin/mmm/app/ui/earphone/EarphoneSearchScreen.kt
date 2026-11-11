@@ -12,8 +12,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
+import mmm.app.ui.components.glass.OutlinedButton
+import mmm.app.ui.components.glass.GlassTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -35,7 +35,7 @@ import kotlinx.coroutines.launch
 import mmm.app.MmmApplication
 import mmm.app.data.SquigClient
 import mmm.app.data.SquigEntry
-import mmm.app.ui.theme.ScreenHeader
+import mmm.app.ui.components.glass.GlassTopBar
 import java.util.Locale
 
 data class SearchUiState(
@@ -143,13 +143,13 @@ fun EarphoneSearchScreen(app: MmmApplication, onBack: () -> Unit, onAdded: (Stri
             modifier = Modifier.padding(padding).fillMaxSize().padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            ScreenHeader(title = "측정치 찾기", onBack = onBack)
+            GlassTopBar(title = "측정치 찾기", onBack = onBack)
             Text(
                 "earphonesarchive.squig.link의 B&K 5128 측정치에서 찾는다." +
                     if (ui.total > 0) " (${ui.total}개)" else "",
                 style = MaterialTheme.typography.bodySmall,
             )
-            OutlinedTextField(
+            GlassTextField(
                 value = ui.query,
                 onValueChange = vm::search,
                 label = { Text("이어폰 이름 (예: bravo, airpods pro)") },

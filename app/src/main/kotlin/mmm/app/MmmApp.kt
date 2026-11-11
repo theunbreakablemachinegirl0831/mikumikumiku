@@ -115,10 +115,23 @@ import mmm.app.ui.player.NowPlayingScreen
 import mmm.app.ui.progress.ProgressScreen
 import mmm.app.ui.settings.SettingsScreen
 import mmm.app.ui.spotify.SpotifyScreen
-import mmm.app.ui.theme.Backdrop
+import mmm.app.ui.components.glass.Backdrop
+import mmm.app.ui.components.glass.GlassIconButton
+import mmm.app.ui.components.glass.GlassLevel
+import mmm.app.ui.components.glass.GlassNavItem
+import mmm.app.ui.components.glass.GlassNavigationBar
+import mmm.app.ui.components.glass.GlassProgressBar
+import mmm.app.ui.components.glass.LocalBackdropTint
+import mmm.app.ui.components.glass.LocalGlassBackdrop
+import mmm.app.ui.components.glass.glass
+import mmm.app.ui.components.glass.glassBackdropSource
+import mmm.app.ui.components.glass.rememberGlassBackdrop
 import mmm.app.ui.theme.DefaultTint
-import mmm.app.ui.theme.Glass
-import mmm.app.ui.theme.LocalPanelInset
+import mmm.app.ui.theme.GlassDimensions
+import mmm.app.ui.theme.GlassMotion
+import mmm.app.ui.theme.GlassTheme
+import mmm.app.ui.theme.GlassShapes
+import mmm.app.ui.components.glass.LocalPanelInset
 import mmm.training.ExerciseFamily
 import kotlin.math.roundToInt
 
@@ -256,8 +269,15 @@ fun MmmApp(app: MmmApplication) {
     LaunchedEffect(now.hasMedia) { if (!now.hasMedia) expand.snapTo(0f) }
 
     val tint = (if (route == Routes.SPOTIFY && !open) external.tint else null) ?: now.tint ?: DefaultTint
+    val settings by app.settings.settings.collectAsStateWithLifecycle()
+    // What the floating panel sees through and blurs: the backdrop and every screen on it. The
+    // panel itself is drawn beside this, not inside it, or it would be looking at itself.
+    val backdrop = rememberGlassBackdrop(settings.backdropBlur)
 
-    Backdrop(tint = tint) {
+    CompositionLocalProvider(LocalGlassBackdrop provides backdrop, LocalBackdropTint provides tint) {
+        Box(Modifier.fillMaxSize()) {
+        Box(Modifier.fillMaxSize().glassBackdropSource(backdrop)) {
+            Backdrop(tint = tint) {
         Box(
             Modifier
                 .fillMaxSize()
@@ -303,6 +323,12 @@ fun MmmApp(app: MmmApplication) {
                 )
             }
 
+        }
+            }
+        }
+
+        // Chrome: above the backdrop source, inside the same insets.
+        Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.systemBars)) {
             AnimatedVisibility(
                 visible = onTab || open,
                 modifier = Modifier.align(Alignment.BottomCenter),
@@ -311,7 +337,6 @@ fun MmmApp(app: MmmApplication) {
             ) {
                 BottomPanel(
                     now = now,
-                    tint = tint,
                     selected = TABS.indexOfFirst { it.route == if (open) Routes.PLAYER else route },
                     progress = { expand.value },
                     onTab = { target ->
@@ -348,6 +373,7 @@ fun MmmApp(app: MmmApplication) {
                 )
             }
         }
+        }
     }
 }
 
@@ -365,13 +391,14 @@ private fun NavHostController.goToTab(route: String) {
 }
 
 /**
- * The reference's floating panel: the mini player with its progress line, over the tab icons.
- * The mini player's height follows [progress], folding away as the now-playing screen opens.
+ * The reference's floating panel: the mini player with its progress line, over the destinations.
+ * It is the one pane in the app that floats over moving content, so it is the one that blurs what
+ * is behind it. The mini player's height follows [progress], folding away as the now-playing
+ * screen opens.
  */
 @Composable
 private fun BottomPanel(
     now: NowPlaying,
-    tint: Color,
     selected: Int,
     progress: () -> Float,
     onTab: (String) -> Unit,
@@ -382,21 +409,18 @@ private fun BottomPanel(
     miniModifier: Modifier,
     modifier: Modifier = Modifier,
 ) {
-    val shape = RoundedCornerShape(30.dp)
-    val mini by animateFloatAsState(if (now.hasMedia) 1f else 0f, spring(dampingRatio = 0.85f, stiffness = 300f), label = "mini")
-    // Glass with nothing behind it blurred has to be nearly opaque, or the list scrolling under
-    // it would be read through it; it takes the backdrop's colour so it still looks like part of it.
-    val fill by animateColorAsState(lerp(tint, Color.Black, 0.5f).copy(alpha = 0.86f), tween(900), label = "panel")
+    val reduced = GlassTheme.reducedMotion
+    val mini by animateFloatAsState(
+        if (now.hasMedia) 1f else 0f,
+        GlassMotion.unlessReduced(reduced, GlassMotion.panel()),
+        label = "mini",
+    )
 
     Column(
         modifier
-            .padding(horizontal = 12.dp, vertical = PANEL_MARGIN)
+            .padding(horizontal = GlassDimensions.panelMargin, vertical = PANEL_MARGIN)
             .fillMaxWidth()
-            .clip(shape)
-            .background(fill)
-            .background(Color.White.copy(alpha = 0.07f))
-            .background(Glass.sheen)
-            .border(BorderStroke(1.dp, Glass.edge), shape),
+            .glass(GlassShapes.floating, level = GlassLevel.Regular, floating = true),
     ) {
         Box(
             Modifier
@@ -413,6 +437,7 @@ private fun BottomPanel(
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
+                        onClickLabel = "재생 화면 열기",
                         onClick = onOpenPlayer,
                     )
                     .padding(start = 12.dp, end = 8.dp, top = 12.dp),
@@ -436,7 +461,7 @@ private fun BottomPanel(
                             overflow = TextOverflow.Ellipsis,
                         )
                     }
-                    IconButton(onClick = onToggle) {
+                    GlassIconButton(onClick = onToggle, level = null) {
                         Icon(
                             if (now.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                             contentDescription = if (now.isPlaying) "일시정지" else "재생",
@@ -444,81 +469,22 @@ private fun BottomPanel(
                         )
                     }
                 }
-                LinearProgressIndicator(
+                GlassProgressBar(
                     progress = { if (now.durationMs > 0) (now.positionMs.toFloat() / now.durationMs).coerceIn(0f, 1f) else 0f },
                     modifier = Modifier.fillMaxWidth().padding(top = 10.dp, end = 4.dp).height(3.dp),
-                    color = Color.White,
-                    trackColor = Color.White.copy(alpha = 0.2f),
-                    strokeCap = StrokeCap.Round,
                 )
             }
         }
-        TabIcons(selected, onTab, Modifier.onSizeChanged { onIconRowHeight(it.height) })
+        GlassNavigationBar(
+            items = NAV_ITEMS,
+            selected = selected,
+            onSelect = { onTab(TABS[it].route) },
+            modifier = Modifier.onSizeChanged { onIconRowHeight(it.height) },
+        )
     }
 }
 
-/**
- * The tab icons, with a lens of brighter glass under the selected one. The lens moves like a
- * drop: its leading edge goes first and its trailing edge catches up, so between two tabs it
- * stretches across both.
- */
-@Composable
-private fun TabIcons(selected: Int, onTab: (String) -> Unit, modifier: Modifier = Modifier) {
-    val left = remember { Animatable(selected.coerceAtLeast(0).toFloat()) }
-    val right = remember { Animatable(selected.coerceAtLeast(0) + 1f) }
-    LaunchedEffect(selected) {
-        if (selected < 0) return@LaunchedEffect
-        val forward = selected > left.value
-        launch { left.animateTo(selected.toFloat(), spring(LENS_DAMPING, if (forward) LENS_TRAILING else LENS_LEADING)) }
-        launch { right.animateTo(selected + 1f, spring(LENS_DAMPING, if (forward) LENS_LEADING else LENS_TRAILING)) }
-    }
-    Row(
-        modifier
-            .fillMaxWidth()
-            .drawBehind {
-                val cell = size.width / TABS.size
-                val height = size.height * 0.74f
-                val inset = (cell - height * 1.5f).coerceAtLeast(0f) / 2
-                drawRoundRect(
-                    Color.White.copy(alpha = 0.16f),
-                    topLeft = Offset(left.value * cell + inset, (size.height - height) / 2),
-                    size = Size(((right.value - left.value) * cell - 2 * inset).coerceAtLeast(0f), height),
-                    cornerRadius = CornerRadius(height / 2),
-                )
-            },
-    ) {
-        TABS.forEachIndexed { index, tab ->
-            val active = index == selected
-            val color by animateColorAsState(if (active) Color.White else Color.White.copy(alpha = 0.42f), tween(220), label = "tab")
-            val scale by animateFloatAsState(if (active) 1.12f else 1f, spring(dampingRatio = 0.5f, stiffness = 400f), label = "tab-scale")
-            Box(
-                Modifier
-                    .weight(1f)
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = { onTab(tab.route) },
-                    )
-                    .padding(vertical = 16.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    tab.icon,
-                    contentDescription = tab.label,
-                    tint = color,
-                    modifier = Modifier.size(27.dp).graphicsLayer {
-                        scaleX = scale
-                        scaleY = scale
-                    },
-                )
-            }
-        }
-    }
-}
-
-private const val LENS_DAMPING = 0.75f
-private const val LENS_LEADING = 600f
-private const val LENS_TRAILING = 220f
+private val NAV_ITEMS = TABS.map { GlassNavItem(it.label, it.icon) }
 
 @Composable
 private fun AppNavHost(app: MmmApplication, nav: NavHostController) {

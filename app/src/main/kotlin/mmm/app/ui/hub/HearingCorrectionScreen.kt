@@ -23,18 +23,19 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import mmm.app.MmmApplication
+import mmm.app.ui.theme.GlassTheme
 import mmm.app.ui.earphone.GraphCurve
 import mmm.app.ui.earphone.ResponseGraph
-import mmm.app.ui.theme.FilterChip
-import mmm.app.ui.theme.GlassButton
-import mmm.app.ui.theme.GroupCard
-import mmm.app.ui.theme.GroupDivider
-import mmm.app.ui.theme.ScreenHeader
-import mmm.app.ui.theme.SectionHeader
-import mmm.app.ui.theme.SettingRow
-import mmm.app.ui.theme.Switch
-import mmm.app.ui.theme.WhiteSlider
-import mmm.app.ui.theme.glass
+import mmm.app.ui.components.glass.FilterChip
+import mmm.app.ui.components.glass.GlassButton
+import mmm.app.ui.components.glass.GroupCard
+import mmm.app.ui.components.glass.GroupDivider
+import mmm.app.ui.components.glass.GlassTopBar
+import mmm.app.ui.components.glass.SectionHeader
+import mmm.app.ui.components.glass.SettingRow
+import mmm.app.ui.components.glass.Switch
+import mmm.app.ui.components.glass.GlassSlider
+import mmm.app.ui.components.glass.glass
 import mmm.eq.EqProfile
 import mmm.eq.FrequencyResponse
 import mmm.eq.HearingPrescription
@@ -60,7 +61,7 @@ fun HearingCorrectionScreen(app: MmmApplication, onBack: () -> Unit, onOpenAudio
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        ScreenHeader(title = "귀 응답 보정", onBack = onBack, subtitle = "청력 검사 결과로 내 귀에 맞는 EQ를 만든다")
+        GlassTopBar(title = "귀 응답 보정", onBack = onBack, subtitle = "청력 검사 결과로 내 귀에 맞는 EQ를 만든다")
 
         hearing.message?.let { message ->
             Column(Modifier.fillMaxWidth().glass().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -101,7 +102,7 @@ fun HearingCorrectionScreen(app: MmmApplication, onBack: () -> Unit, onOpenAudio
                     Text("강도", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
                     Text("${(state.hearingStrength * 100).roundToInt()}%", style = MaterialTheme.typography.bodyLarge)
                 }
-                WhiteSlider(
+                GlassSlider(
                     value = state.hearingStrength.toFloat(),
                     onValueChange = { v -> app.eq.update { it.copy(hearingStrength = (v * 20).roundToInt() / 20.0) } },
                     valueRange = 0f..1.5f,
@@ -129,7 +130,7 @@ fun HearingCorrectionScreen(app: MmmApplication, onBack: () -> Unit, onOpenAudio
                 val applied = remember(hearing.filters) { EqProfile(hearing.filters, 0.0).response(FrequencyResponse.logGrid(20.0, 20000.0, 12)) }
                 ResponseGraph(
                     listOf(
-                        GraphCurve("처방식이 요구하는 이득", wanted, Color.White.copy(alpha = 0.55f), dashed = true),
+                        GraphCurve("처방식이 요구하는 이득", wanted, GlassTheme.colors.inkMuted, dashed = true),
                         GraphCurve("필터 ${hearing.filters.size}개로 맞춘 EQ", applied, MaterialTheme.colorScheme.tertiary),
                     ),
                 )

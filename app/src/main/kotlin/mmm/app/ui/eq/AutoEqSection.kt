@@ -15,18 +15,15 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.ArrowDropDown
-import androidx.compose.material3.DropdownMenu
+import mmm.app.ui.components.glass.GlassMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.RangeSlider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -47,14 +44,17 @@ import mmm.app.data.EarphoneProfile
 import mmm.app.data.PlaybackEq
 import mmm.app.data.RuleTargetKind
 import mmm.app.data.SquigClient
+import mmm.app.ui.components.glass.GlassBottomSheet
+import mmm.app.ui.components.glass.glassSliderColors
+import mmm.app.ui.theme.GlassTheme
 import mmm.app.ui.earphone.GraphCurve
 import mmm.app.ui.earphone.ResponseGraph
-import mmm.app.ui.theme.FilterChip
-import mmm.app.ui.theme.GlassButton
-import mmm.app.ui.theme.GroupDivider
-import mmm.app.ui.theme.PillTabs
-import mmm.app.ui.theme.Switch
-import mmm.app.ui.theme.glass
+import mmm.app.ui.components.glass.FilterChip
+import mmm.app.ui.components.glass.GlassButton
+import mmm.app.ui.components.glass.GroupDivider
+import mmm.app.ui.components.glass.PillTabs
+import mmm.app.ui.components.glass.Switch
+import mmm.app.ui.components.glass.glass
 import mmm.eq.EqProfile
 import mmm.training.FrequencyRange
 import kotlin.math.ln
@@ -103,7 +103,7 @@ internal fun AutoEqSection(
                 }
                 Icon(Icons.Rounded.ArrowDropDown, contentDescription = "이어폰 고르기")
             }
-            DropdownMenu(expanded = choosing, onDismissRequest = { choosing = false }) {
+            GlassMenu(expanded = choosing, onDismissRequest = { choosing = false }) {
                 earphones.forEach { earphone ->
                     DropdownMenuItem(
                         text = { Text(earphone.name) },
@@ -115,7 +115,7 @@ internal fun AutoEqSection(
                 DropdownMenuItem(text = { Text("이어폰 보정 열기") }, onClick = { choosing = false; onOpenEarphones() })
             }
         }
-        if (auto.busy) LinearProgressIndicator(Modifier.fillMaxWidth(), color = Color.White, trackColor = Color.White.copy(alpha = 0.15f))
+        if (auto.busy) LinearProgressIndicator(Modifier.fillMaxWidth(), color = GlassTheme.colors.accent, trackColor = GlassTheme.colors.inkFaint.copy(alpha = 0.2f))
         Text(
             when {
                 source == null -> "먼저 쓰는 이어폰을 고른다. 측정치는 earphonesarchive.squig.link에서 받는다."
@@ -195,7 +195,7 @@ internal fun AutoEqSection(
         Column(Modifier.fillMaxWidth().glass().padding(14.dp)) {
             ResponseGraph(
                 listOfNotNull(
-                    GraphCurve("측정 (${auto.sourceName.orEmpty()})", measured, Color.White.copy(alpha = 0.55f)),
+                    GraphCurve("측정 (${auto.sourceName.orEmpty()})", measured, GlassTheme.colors.inkMuted),
                     auto.predicted?.let { GraphCurve("EQ 적용 후 예상", it, MaterialTheme.colorScheme.tertiary) },
                 ),
             )
@@ -267,12 +267,7 @@ private fun RuleSheet(
     var fromHz by remember { mutableStateOf(initial.fromHz) }
     var toHz by remember { mutableStateOf(initial.toHz) }
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = Color(0xFF1E1D25),
-        contentColor = Color.White,
-    ) {
+    GlassBottomSheet(onDismiss = onDismiss) {
         Column(
             Modifier
                 .fillMaxWidth()
@@ -330,11 +325,7 @@ private fun RuleSheet(
                     }
                 },
                 valueRange = 0f..1f,
-                colors = SliderDefaults.colors(
-                    thumbColor = Color.White,
-                    activeTrackColor = Color.White,
-                    inactiveTrackColor = Color.White.copy(alpha = 0.22f),
-                ),
+                colors = glassSliderColors(),
             )
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 RANGE_PRESETS.forEach { (name, preset) ->

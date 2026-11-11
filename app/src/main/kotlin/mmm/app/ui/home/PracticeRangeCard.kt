@@ -5,12 +5,13 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.padding
-import mmm.app.ui.theme.Card
+import mmm.app.ui.components.glass.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
-import mmm.app.ui.theme.FilterChip
+import mmm.app.ui.components.glass.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RangeSlider
 import androidx.compose.material3.Text
+import mmm.app.ui.components.glass.glassSliderColors
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -82,6 +83,7 @@ fun PracticeRangeCard(current: FrequencyRange?, onChange: (FrequencyRange?) -> U
                         onChange(FrequencyRange(toHz(sliderRange.start), toHz(sliderRange.endInclusive)))
                     },
                     valueRange = 0f..1f,
+                    colors = glassSliderColors(),
                 )
             }
 

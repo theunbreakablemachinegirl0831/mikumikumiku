@@ -60,11 +60,13 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import mmm.app.BuildConfig
 import mmm.app.MmmApplication
 import mmm.app.data.FamilyProgress
-import mmm.app.ui.theme.GroupCard
-import mmm.app.ui.theme.GroupDivider
-import mmm.app.ui.theme.LocalPanelInset
-import mmm.app.ui.theme.PillTabs
-import mmm.app.ui.theme.glass
+import mmm.app.ui.components.glass.GroupCard
+import mmm.app.ui.components.glass.GroupDivider
+import mmm.app.ui.components.glass.LocalPanelInset
+import mmm.app.ui.components.glass.PillTabs
+import mmm.app.ui.components.glass.GlassLevel
+import mmm.app.ui.components.glass.GlassProgressBar
+import mmm.app.ui.components.glass.glass
 import mmm.training.Curriculum
 import mmm.training.ExerciseFamily
 
@@ -232,19 +234,16 @@ private fun CardGrid(items: List<HubItem>) {
 
 @Composable
 private fun Bubble(icon: ImageVector) {
-    Box(Modifier.size(44.dp).glass(CircleShape, strong = true), contentAlignment = Alignment.Center) {
+    Box(Modifier.size(44.dp).glass(CircleShape, level = GlassLevel.Regular), contentAlignment = Alignment.Center) {
         Icon(icon, contentDescription = null, modifier = Modifier.size(24.dp))
     }
 }
 
 @Composable
 private fun Level(fraction: Float) {
-    LinearProgressIndicator(
+    GlassProgressBar(
         progress = { fraction },
         modifier = Modifier.fillMaxWidth().height(4.dp),
-        color = Color.White,
-        trackColor = Color.White.copy(alpha = 0.15f),
-        strokeCap = StrokeCap.Round,
     )
 }
 

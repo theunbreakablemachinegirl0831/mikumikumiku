@@ -15,19 +15,19 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import mmm.app.ui.theme.Card
+import mmm.app.ui.components.glass.Button
+import mmm.app.ui.components.glass.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import mmm.app.ui.theme.FilterChip
+import mmm.app.ui.components.glass.FilterChip
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
+import mmm.app.ui.components.glass.OutlinedButton
+import mmm.app.ui.components.glass.GlassTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Slider
-import mmm.app.ui.theme.Switch
+import mmm.app.ui.components.glass.GlassSlider
+import mmm.app.ui.components.glass.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import mmm.app.ui.components.glass.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -48,7 +48,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import mmm.app.MmmApplication
 import mmm.app.data.EarphoneConnection
 import mmm.app.data.EarphoneProfile
-import mmm.app.ui.theme.ScreenHeader
+import mmm.app.ui.components.glass.GlassTopBar
 import mmm.eq.EqFilterType
 import mmm.eq.EqProfile
 import java.util.Locale
@@ -83,7 +83,7 @@ fun EarphoneScreen(app: MmmApplication, id: String, onBack: () -> Unit) {
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            ScreenHeader(title = profile?.name ?: "이어폰", onBack = onBack)
+            GlassTopBar(title = profile?.name ?: "이어폰", onBack = onBack)
             if (profile == null) {
                 Text("이 이어폰을 찾을 수 없다.")
                 return@Column
@@ -116,7 +116,7 @@ private fun BasicsCard(profile: EarphoneProfile, vm: EarphoneViewModel) {
     var name by remember(profile.id) { mutableStateOf(profile.name) }
     var note by remember(profile.id) { mutableStateOf(profile.note) }
     StepCard("이어폰") {
-        OutlinedTextField(
+        GlassTextField(
             value = name,
             onValueChange = { name = it; if (it.isNotBlank()) vm.rename(it.trim()) },
             label = { Text("이름") },
@@ -139,7 +139,7 @@ private fun BasicsCard(profile: EarphoneProfile, vm: EarphoneViewModel) {
                 style = MaterialTheme.typography.bodySmall,
             )
         }
-        OutlinedTextField(
+        GlassTextField(
             value = note,
             onValueChange = { note = it; vm.setNote(it) },
             label = { Text("메모 (이어팁, 노이즈 캔슬링 모드 등)") },
@@ -194,7 +194,7 @@ private fun TargetCard(profile: EarphoneProfile, targets: List<String>, vm: Earp
         }
 
         Text("기울기: ${format(tilt.toDouble(), 2)} dB/oct", style = MaterialTheme.typography.bodyMedium)
-        Slider(
+        GlassSlider(
             value = tilt,
             onValueChange = { tilt = (it * 4).roundToInt() / 4f },
             onValueChangeFinished = { vm.setTilt(tilt.toDouble()) },

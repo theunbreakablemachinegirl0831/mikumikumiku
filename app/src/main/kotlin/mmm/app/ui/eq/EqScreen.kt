@@ -25,7 +25,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.ArrowDropDown
 import androidx.compose.material.icons.rounded.MoreHoriz
-import androidx.compose.material3.DropdownMenu
+import mmm.app.ui.components.glass.GlassMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -50,13 +50,13 @@ import mmm.app.MmmApplication
 import mmm.app.data.PeqBand
 import mmm.app.data.PlaybackEq
 import mmm.app.sessioneq.SessionEqService
-import mmm.app.ui.theme.GlassButton
-import mmm.app.ui.theme.LocalPanelInset
-import mmm.app.ui.theme.PillTabs
-import mmm.app.ui.theme.RoundChip
-import mmm.app.ui.theme.Switch
-import mmm.app.ui.theme.WhiteSlider
-import mmm.app.ui.theme.glass
+import mmm.app.ui.components.glass.GlassButton
+import mmm.app.ui.components.glass.LocalPanelInset
+import mmm.app.ui.components.glass.PillTabs
+import mmm.app.ui.components.glass.RoundChip
+import mmm.app.ui.components.glass.Switch
+import mmm.app.ui.components.glass.GlassSlider
+import mmm.app.ui.components.glass.glass
 import mmm.app.ui.visual.PlayerSpectrumSource
 import mmm.app.ui.visual.VisualizerSpectrumSource
 import mmm.app.ui.visual.rememberSpectrum
@@ -143,7 +143,7 @@ fun EqScreen(app: MmmApplication, onOpenEarphones: () -> Unit, onFindEarphone: (
             }
             Box {
                 IconButton(onClick = { menu = true }) { Icon(Icons.Rounded.MoreHoriz, contentDescription = "더 보기") }
-                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                GlassMenu(expanded = menu, onDismissRequest = { menu = false }) {
                     DropdownMenuItem(
                         text = { Text("EQ 파일 가져오기 (APO · AutoEq) → PEQ") },
                         onClick = { menu = false; importEq.launch(arrayOf("text/*", "application/octet-stream")) },
@@ -332,7 +332,7 @@ private fun TypeMenu(type: EqFilterType, onChange: (EqFilterType) -> Unit) {
             Text(typeLabel(type), style = MaterialTheme.typography.titleMedium)
             Icon(Icons.Rounded.ArrowDropDown, contentDescription = "필터 종류")
         }
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+        GlassMenu(expanded = open, onDismissRequest = { open = false }) {
             EqFilterType.entries.forEach { option ->
                 DropdownMenuItem(text = { Text(typeLabel(option)) }, onClick = { open = false; onChange(option) })
             }
@@ -354,7 +354,7 @@ internal fun LabelledSlider(
             Text(label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
             Text(value, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
         }
-        WhiteSlider(
+        GlassSlider(
             value = position.coerceIn(range.start, range.endInclusive),
             onValueChange = onChange,
             valueRange = range,

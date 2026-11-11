@@ -21,7 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.MoreHoriz
-import androidx.compose.material3.DropdownMenu
+import mmm.app.ui.components.glass.GlassMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -46,6 +46,7 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 import mmm.app.MmmApplication
+import mmm.app.ui.theme.GlassTheme
 import mmm.app.sessioneq.SessionEqService
 import mmm.app.sessioneq.SessionEqStatus
 import mmm.app.spotify.ExternalNowPlaying
@@ -53,10 +54,10 @@ import mmm.app.spotify.ExternalPlayback
 import mmm.app.ui.player.ArtWithSpectrum
 import mmm.app.ui.player.SeekBar
 import mmm.app.ui.player.Transport
-import mmm.app.ui.theme.GlassButton
-import mmm.app.ui.theme.LocalPanelInset
-import mmm.app.ui.theme.Switch
-import mmm.app.ui.theme.glass
+import mmm.app.ui.components.glass.GlassButton
+import mmm.app.ui.components.glass.LocalPanelInset
+import mmm.app.ui.components.glass.Switch
+import mmm.app.ui.components.glass.glass
 import mmm.app.ui.visual.VisualizerSpectrumSource
 
 /**
@@ -115,7 +116,7 @@ fun SpotifyScreen(app: MmmApplication, onOpenEq: () -> Unit) {
             Text(appName(external.packageName), style = MaterialTheme.typography.headlineMedium, modifier = Modifier.weight(1f))
             Box {
                 IconButton(onClick = { menu = true }) { Icon(Icons.Rounded.MoreHoriz, contentDescription = "더 보기") }
-                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                GlassMenu(expanded = menu, onDismissRequest = { menu = false }) {
                     DropdownMenuItem(text = { Text("Spotify 열기") }, onClick = { menu = false; openSpotify() })
                     DropdownMenuItem(text = { Text("재생 EQ 열기") }, onClick = { menu = false; onOpenEq() })
                     DropdownMenuItem(text = { Text("재생 정보 접근 설정") }, onClick = { menu = false; openAccess() })
@@ -225,7 +226,7 @@ private fun EqStatus(masterOn: Boolean, systemEq: Boolean, status: SessionEqStat
                 "오래 기다려도 안 붙으면 Spotify가 세션을 알려 주지 않는 것이다. 설정 → 재생 EQ → '폰 전체 출력에 적용'을 켠다.",
                 style = MaterialTheme.typography.bodySmall,
                 textAlign = TextAlign.Start,
-                color = Color.White.copy(alpha = 0.6f),
+                color = GlassTheme.colors.inkMuted,
             )
         }
     }

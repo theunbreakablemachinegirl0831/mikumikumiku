@@ -27,14 +27,16 @@ import mmm.app.BuildConfig
 import mmm.app.MmmApplication
 import mmm.app.data.PlaybackEq
 import mmm.app.data.TrainerSettings
-import mmm.app.ui.theme.GroupCard
-import mmm.app.ui.theme.GroupDivider
-import mmm.app.ui.theme.LocalPanelInset
-import mmm.app.ui.theme.PillTabs
-import mmm.app.ui.theme.ScreenHeader
-import mmm.app.ui.theme.SectionHeader
-import mmm.app.ui.theme.SettingRow
-import mmm.app.ui.theme.Switch
+import mmm.app.ui.components.glass.GroupCard
+import mmm.app.ui.components.glass.GroupDivider
+import mmm.app.ui.components.glass.LocalPanelInset
+import mmm.app.ui.components.glass.PillTabs
+import mmm.app.ui.components.glass.backdropBlurSupported
+import mmm.app.ui.theme.ThemeMode
+import mmm.app.ui.components.glass.GlassTopBar
+import mmm.app.ui.components.glass.SectionHeader
+import mmm.app.ui.components.glass.SettingRow
+import mmm.app.ui.components.glass.Switch
 
 /**
  * Everything that is a setting rather than a control, in one place, grouped as the reference
@@ -60,7 +62,7 @@ fun SettingsScreen(app: MmmApplication, onOpenEarphones: () -> Unit) {
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        ScreenHeader(title = "설정")
+        GlassTopBar(title = "설정")
 
         SectionHeader("재생 EQ가 걸리는 곳")
         GroupCard {
@@ -131,6 +133,32 @@ fun SettingsScreen(app: MmmApplication, onOpenEarphones: () -> Unit) {
 
         SectionHeader("화면")
         GroupCard {
+            Column(Modifier.padding(horizontal = 18.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("테마", style = MaterialTheme.typography.bodyLarge)
+                PillTabs(
+                    labels = ThemeMode.entries.map { it.label },
+                    selected = ThemeMode.entries.indexOf(settings.themeMode),
+                    onSelect = { index -> app.settings.setThemeMode(ThemeMode.entries[index]) },
+                    fill = true,
+                )
+            }
+            GroupDivider()
+            SettingRow(
+                title = "유리 뒤 실시간 흐림",
+                subtitle = if (backdropBlurSupported) {
+                    "하단 패널이 그 뒤로 지나가는 화면을 실제로 흐려 보여 준다. 끄면 불투명한 유리로 바뀐다 - 화면이 깨져 보이거나 느리면 끈다."
+                } else {
+                    "안드로이드 12부터 쓸 수 있다. 이 기기에서는 불투명한 유리로 그린다."
+                },
+                trailing = {
+                    Switch(
+                        checked = settings.backdropBlur && backdropBlurSupported,
+                        onCheckedChange = app.settings::setBackdropBlur,
+                        enabled = backdropBlurSupported,
+                    )
+                },
+            )
+            GroupDivider()
             Column(Modifier.padding(horizontal = 18.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("비주얼라이저 해상도", style = MaterialTheme.typography.bodyLarge)
                 PillTabs(

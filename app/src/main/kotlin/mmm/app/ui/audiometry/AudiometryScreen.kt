@@ -11,14 +11,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import mmm.app.ui.theme.Card
+import mmm.app.ui.components.glass.Button
+import mmm.app.ui.components.glass.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import mmm.app.ui.components.glass.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import mmm.app.ui.components.glass.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -46,7 +46,7 @@ import kotlinx.coroutines.launch
 import mmm.app.MmmApplication
 import mmm.app.audiometry.AudiometryProgress
 import mmm.app.audiometry.AudiometryRunner
-import mmm.app.ui.theme.ScreenHeader
+import mmm.app.ui.components.glass.GlassTopBar
 import mmm.eq.EarphoneCalibration
 import mmm.training.audiometry.AudiogramCalibration
 import mmm.training.audiometry.AudiogramResult
@@ -151,7 +151,7 @@ fun AudiometryScreen(app: MmmApplication, onBack: (() -> Unit)?) {
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            ScreenHeader(title = "청력 검사", onBack = onBack?.let { back -> { vm.stop(); back() } })
+            GlassTopBar(title = "청력 검사", onBack = onBack?.let { back -> { vm.stop(); back() } })
 
             if (ui.running) {
                 RunningContent(ui.progress, onPress = vm::press, onStop = vm::stop)
