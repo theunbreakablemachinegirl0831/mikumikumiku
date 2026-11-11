@@ -14,9 +14,12 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.LocalTextStyle
@@ -214,7 +217,11 @@ fun glassSliderColors(): SliderColors {
     )
 }
 
-/** Material's slider - its touch handling and accessibility are worth keeping - in the theme's ink. */
+/**
+ * Material's slider - its touch handling and accessibility are worth keeping - drawn as the
+ * reference draws its own: a thin line with a round thumb, in the theme's ink.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GlassSlider(
     value: Float,
@@ -225,17 +232,35 @@ fun GlassSlider(
     onValueChangeFinished: (() -> Unit)? = null,
     enabled: Boolean = true,
 ) {
+    val colors = GlassTheme.colors
+    val sliderColors = glassSliderColors()
     Slider(
         value = value,
         onValueChange = onValueChange,
         modifier = modifier,
-        valueRange = valueRange,
-        steps = steps,
-        onValueChangeFinished = onValueChangeFinished,
         enabled = enabled,
-        colors = glassSliderColors(),
+        onValueChangeFinished = onValueChangeFinished,
+        colors = sliderColors,
+        steps = steps,
+        thumb = {
+            Box(Modifier.size(THUMB).background(if (enabled) colors.accent else colors.inkFaint, GlassShapes.circle))
+        },
+        track = { state ->
+            SliderDefaults.Track(
+                sliderState = state,
+                modifier = Modifier.height(TRACK),
+                enabled = enabled,
+                colors = sliderColors,
+                drawStopIndicator = null,
+                thumbTrackGapSize = 0.dp,
+            )
+        },
+        valueRange = valueRange,
     )
 }
+
+private val THUMB = 18.dp
+private val TRACK = 4.dp
 
 /** A thin, round-ended progress line in the ink. */
 @Composable

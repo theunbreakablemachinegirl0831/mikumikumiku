@@ -59,6 +59,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -73,6 +74,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
@@ -87,6 +89,7 @@ import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -97,6 +100,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import mmm.app.player.NowPlaying
 import mmm.app.ui.audiometry.AudiometryScreen
@@ -115,6 +119,7 @@ import mmm.app.ui.player.NowPlayingScreen
 import mmm.app.ui.progress.ProgressScreen
 import mmm.app.ui.settings.SettingsScreen
 import mmm.app.ui.spotify.SpotifyScreen
+import mmm.app.ui.spotify.appName
 import mmm.app.ui.components.glass.Backdrop
 import mmm.app.ui.components.glass.GlassIconButton
 import mmm.app.ui.components.glass.GlassLevel
@@ -268,6 +273,55 @@ fun MmmApp(app: MmmApplication) {
     BackHandler(enabled = open) { settle(0f) }
     LaunchedEffect(now.hasMedia) { if (!now.hasMedia) expand.snapTo(0f) }
 
+    // The mini player shows whichever is being listened to: this app's player or another app's
+    // (Spotify). Whichever started playing last keeps it while both are paused.
+    var externalLast by remember { mutableStateOf(false) }
+    LaunchedEffect(now.isPlaying, external.isPlaying) {
+        when {
+            now.isPlaying -> externalLast = false
+            external.isPlaying -> externalLast = true
+        }
+    }
+    val showExternal = external.hasSession && !open && (externalLast || !now.hasMedia)
+    // Other apps report their position only when it jumps; in between it is worked out from the clock.
+    var externalPosition by remember { mutableLongStateOf(0L) }
+    LaunchedEffect(showExternal, external.positionMs, external.positionAt, external.isPlaying) {
+        while (showExternal) {
+            externalPosition = external.positionNow()
+            delay(500)
+        }
+    }
+    // Looked at again whenever the app comes back: what other apps play changes while it is away.
+    LifecycleResumeEffect(Unit) {
+        app.external.refresh()
+        onPauseOrDispose { }
+    }
+    val mini = when {
+        showExternal -> MiniPlayer(
+            trackId = null,
+            artwork = external.artwork,
+            title = external.title ?: appName(external.packageName),
+            subtitle = listOfNotNull(external.artist, appName(external.packageName)).joinToString(" · "),
+            isPlaying = external.isPlaying,
+            progress = { if (external.durationMs > 0) (externalPosition.toFloat() / external.durationMs).coerceIn(0f, 1f) else 0f },
+            onToggle = app.external::toggle,
+            onOpen = { nav.goToTab(Routes.SPOTIFY) },
+            expandable = false,
+        )
+        now.hasMedia -> MiniPlayer(
+            trackId = now.trackId,
+            artwork = now.artwork,
+            title = now.title.orEmpty(),
+            subtitle = listOfNotNull(now.artist, now.album?.takeIf { it.isNotBlank() }).joinToString(" · "),
+            isPlaying = now.isPlaying,
+            progress = { if (now.durationMs > 0) (now.positionMs.toFloat() / now.durationMs).coerceIn(0f, 1f) else 0f },
+            onToggle = app.player::toggle,
+            onOpen = { settle(1f) },
+            expandable = true,
+        )
+        else -> null
+    }
+
     val tint = (if (route == Routes.SPOTIFY && !open) external.tint else null) ?: now.tint ?: DefaultTint
     val settings by app.settings.settings.collectAsStateWithLifecycle()
     // What the floating panel sees through and blurs: the backdrop and every screen on it. The
@@ -336,15 +390,14 @@ fun MmmApp(app: MmmApplication) {
                     exit = slideOutVertically(tween(240)) { it } + fadeOut(tween(160)),
                 ) {
                     BottomPanel(
-                        now = now,
+                        // On the Spotify tab the same thing is already on screen, larger.
+                        mini = mini?.takeUnless { showExternal && route == Routes.SPOTIFY },
                         selected = TABS.indexOfFirst { it.route == if (open) Routes.PLAYER else route },
                         progress = { expand.value },
                         onTab = { target ->
                             settle(0f)
                             nav.goToTab(target)
                         },
-                        onToggle = app.player::toggle,
-                        onOpenPlayer = { settle(1f) },
                         onMiniArt = { miniArt = it },
                         onIconRowHeight = { iconRowHeight = it },
                         miniModifier = Modifier.draggable(drag, Orientation.Vertical, onDragStopped = { onDragStopped(it) }),
@@ -354,7 +407,7 @@ fun MmmApp(app: MmmApplication) {
 
                 // The artwork in flight: one picture, drawn at the full size and scaled down towards the
                 // mini player, so it is the same pixels all the way and nothing pops.
-                if (open && fullArt.width > 0f && miniArt.width > 0f) {
+                if (open && !showExternal && fullArt.width > 0f && miniArt.width > 0f) {
                     Artwork(
                         trackId = now.trackId,
                         size = with(density) { fullArt.width.toDp() },
@@ -390,6 +443,20 @@ private fun NavHostController.goToTab(route: String) {
     }
 }
 
+/** What the mini player shows and does: this app's player, or another app's. */
+private class MiniPlayer(
+    val trackId: Long?,
+    val artwork: ImageBitmap?,
+    val title: String,
+    val subtitle: String,
+    val isPlaying: Boolean,
+    val progress: () -> Float,
+    val onToggle: () -> Unit,
+    val onOpen: () -> Unit,
+    /** Whether it opens into the now-playing screen, and so can be pulled up. */
+    val expandable: Boolean,
+)
+
 /**
  * The reference's floating panel: the mini player with its progress line, over the destinations.
  * It is the one pane in the app that floats over moving content, so it is the one that blurs what
@@ -398,23 +465,26 @@ private fun NavHostController.goToTab(route: String) {
  */
 @Composable
 private fun BottomPanel(
-    now: NowPlaying,
+    mini: MiniPlayer?,
     selected: Int,
     progress: () -> Float,
     onTab: (String) -> Unit,
-    onToggle: () -> Unit,
-    onOpenPlayer: () -> Unit,
     onMiniArt: (Rect) -> Unit,
     onIconRowHeight: (Int) -> Unit,
     miniModifier: Modifier,
     modifier: Modifier = Modifier,
 ) {
     val reduced = GlassTheme.reducedMotion
-    val mini by animateFloatAsState(
-        if (now.hasMedia) 1f else 0f,
+    val shown by animateFloatAsState(
+        if (mini != null) 1f else 0f,
         GlassMotion.unlessReduced(reduced, GlassMotion.panel()),
         label = "mini",
     )
+    // Kept while it folds away, so the row does not empty before it has gone. A plain holder
+    // rather than state: it is only ever read in the composition that has just written it.
+    val last = remember { arrayOfNulls<MiniPlayer>(1) }
+    if (mini != null) last[0] = mini
+    val content = mini ?: last[0]
 
     Column(
         modifier
@@ -426,53 +496,50 @@ private fun BottomPanel(
             Modifier
                 .layout { measurable, constraints ->
                     val placeable = measurable.measure(constraints)
-                    val shown = (mini * (1f - progress())).coerceIn(0f, 1f)
-                    layout(placeable.width, (placeable.height * shown).roundToInt()) { placeable.place(0, 0) }
+                    val height = (shown * (1f - progress())).coerceIn(0f, 1f)
+                    layout(placeable.width, (placeable.height * height).roundToInt()) { placeable.place(0, 0) }
                 }
                 .clipToBounds()
-                .graphicsLayer { alpha = (mini * (1f - progress() * 2.5f)).coerceIn(0f, 1f) },
+                .graphicsLayer { alpha = (shown * (1f - progress() * 2.5f)).coerceIn(0f, 1f) },
         ) {
-            Column(
-                miniModifier
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClickLabel = "재생 화면 열기",
-                        onClick = onOpenPlayer,
-                    )
-                    .padding(start = 12.dp, end = 8.dp, top = 12.dp),
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Artwork(
-                        trackId = now.trackId,
-                        size = 48.dp,
-                        corner = 10.dp,
-                        bitmap = now.artwork,
-                        modifier = Modifier
-                            .onGloballyPositioned { onMiniArt(it.boundsInRoot()) }
-                            .graphicsLayer { alpha = if (progress() > OPEN_THRESHOLD) 0f else 1f },
-                    )
-                    Column(Modifier.weight(1f)) {
-                        Text(now.title ?: "", style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(
-                            listOfNotNull(now.artist, now.album?.takeIf { it.isNotBlank() }).joinToString(" · "),
-                            style = MaterialTheme.typography.bodySmall,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
+            if (content != null) {
+                Column(
+                    (if (content.expandable) miniModifier else Modifier)
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClickLabel = if (content.expandable) "재생 화면 열기" else "Spotify 탭 열기",
+                            onClick = content.onOpen,
                         )
-                    }
-                    GlassIconButton(onClick = onToggle, level = null) {
-                        Icon(
-                            if (now.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                            contentDescription = if (now.isPlaying) "일시정지" else "재생",
-                            modifier = Modifier.size(30.dp),
+                        .padding(start = 12.dp, end = 8.dp, top = 12.dp),
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Artwork(
+                            trackId = content.trackId,
+                            size = 48.dp,
+                            corner = 10.dp,
+                            bitmap = content.artwork,
+                            modifier = Modifier
+                                .onGloballyPositioned { onMiniArt(it.boundsInRoot()) }
+                                .graphicsLayer { alpha = if (progress() > OPEN_THRESHOLD) 0f else 1f },
                         )
+                        Column(Modifier.weight(1f)) {
+                            Text(content.title, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(content.subtitle, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                        GlassIconButton(onClick = content.onToggle, level = null) {
+                            Icon(
+                                if (content.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                                contentDescription = if (content.isPlaying) "일시정지" else "재생",
+                                modifier = Modifier.size(30.dp),
+                            )
+                        }
                     }
+                    GlassProgressBar(
+                        progress = content.progress,
+                        modifier = Modifier.fillMaxWidth().padding(top = 10.dp, end = 4.dp).height(3.dp),
+                    )
                 }
-                GlassProgressBar(
-                    progress = { if (now.durationMs > 0) (now.positionMs.toFloat() / now.durationMs).coerceIn(0f, 1f) else 0f },
-                    modifier = Modifier.fillMaxWidth().padding(top = 10.dp, end = 4.dp).height(3.dp),
-                )
             }
         }
         GlassNavigationBar(
