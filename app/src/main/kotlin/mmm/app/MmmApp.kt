@@ -276,103 +276,103 @@ fun MmmApp(app: MmmApplication) {
 
     CompositionLocalProvider(LocalGlassBackdrop provides backdrop, LocalBackdropTint provides tint) {
         Box(Modifier.fillMaxSize()) {
-        Box(Modifier.fillMaxSize().glassBackdropSource(backdrop)) {
-            Backdrop(tint = tint) {
-        Box(
-            Modifier
-                .fillMaxSize()
-                .windowInsetsPadding(WindowInsets.systemBars)
-                .onGloballyPositioned {
-                    origin = it.positionInRoot()
-                    areaHeight = it.size.height.coerceAtLeast(1)
-                },
-        ) {
-            val inset = if (onTab) with(density) { panelHeight.toDp() } + 12.dp else 0.dp
-            CompositionLocalProvider(LocalPanelInset provides inset) {
-                AppNavHost(app, nav)
-            }
-
-            if (open) {
-                // The same backdrop again, opaque, so the tab underneath does not show through.
-                // It also takes the touches, so a tap between controls does not reach the list below.
-                Box(
-                    Modifier
-                        .fillMaxSize()
-                        .graphicsLayer { alpha = (expand.value * 1.8f).coerceIn(0f, 1f) }
-                        .pointerInput(Unit) { detectTapGestures { } },
-                ) {
-                    Backdrop(tint = now.tint ?: DefaultTint) {}
-                }
-                NowPlayingScreen(
-                    app = app,
-                    now = now,
-                    artAlpha = { if (expand.value >= SETTLED) 1f else 0f },
-                    onArtBounds = { fullArt = it },
-                    onOpenEq = {
-                        settle(0f)
-                        nav.goToTab(Routes.EQ)
-                    },
-                    modifier = Modifier
-                        .padding(bottom = with(density) { iconRowHeight.toDp() } + PANEL_MARGIN * 2)
-                        .graphicsLayer {
-                            val p = expand.value
-                            alpha = ((p - 0.3f) / 0.7f).coerceIn(0f, 1f)
-                            translationY = (1f - p.coerceAtMost(1f)) * 56.dp.toPx()
+            Box(Modifier.fillMaxSize().glassBackdropSource(backdrop)) {
+                Backdrop(tint = tint) {
+                    Box(
+                        Modifier
+                            .fillMaxSize()
+                            .windowInsetsPadding(WindowInsets.systemBars)
+                            .onGloballyPositioned {
+                                origin = it.positionInRoot()
+                                areaHeight = it.size.height.coerceAtLeast(1)
+                            },
+                    ) {
+                        val inset = if (onTab) with(density) { panelHeight.toDp() } + 12.dp else 0.dp
+                        CompositionLocalProvider(LocalPanelInset provides inset) {
+                            AppNavHost(app, nav)
                         }
-                        .draggable(drag, Orientation.Vertical, onDragStopped = { onDragStopped(it) }),
-                )
+
+                        if (open) {
+                            // The same backdrop again, opaque, so the tab underneath does not show through.
+                            // It also takes the touches, so a tap between controls does not reach the list below.
+                            Box(
+                                Modifier
+                                    .fillMaxSize()
+                                    .graphicsLayer { alpha = (expand.value * 1.8f).coerceIn(0f, 1f) }
+                                    .pointerInput(Unit) { detectTapGestures { } },
+                            ) {
+                                Backdrop(tint = now.tint ?: DefaultTint) {}
+                            }
+                            NowPlayingScreen(
+                                app = app,
+                                now = now,
+                                artAlpha = { if (expand.value >= SETTLED) 1f else 0f },
+                                onArtBounds = { fullArt = it },
+                                onOpenEq = {
+                                    settle(0f)
+                                    nav.goToTab(Routes.EQ)
+                                },
+                                modifier = Modifier
+                                    .padding(bottom = with(density) { iconRowHeight.toDp() } + PANEL_MARGIN * 2)
+                                    .graphicsLayer {
+                                        val p = expand.value
+                                        alpha = ((p - 0.3f) / 0.7f).coerceIn(0f, 1f)
+                                        translationY = (1f - p.coerceAtMost(1f)) * 56.dp.toPx()
+                                    }
+                                    .draggable(drag, Orientation.Vertical, onDragStopped = { onDragStopped(it) }),
+                            )
+                        }
+
+                    }
+                }
             }
 
-        }
-            }
-        }
+            // Chrome: above the backdrop source, inside the same insets.
+            Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.systemBars)) {
+                AnimatedVisibility(
+                    visible = onTab || open,
+                    modifier = Modifier.align(Alignment.BottomCenter),
+                    enter = slideInVertically(spring(dampingRatio = 0.85f, stiffness = 300f)) { it } + fadeIn(tween(200)),
+                    exit = slideOutVertically(tween(240)) { it } + fadeOut(tween(160)),
+                ) {
+                    BottomPanel(
+                        now = now,
+                        selected = TABS.indexOfFirst { it.route == if (open) Routes.PLAYER else route },
+                        progress = { expand.value },
+                        onTab = { target ->
+                            settle(0f)
+                            nav.goToTab(target)
+                        },
+                        onToggle = app.player::toggle,
+                        onOpenPlayer = { settle(1f) },
+                        onMiniArt = { miniArt = it },
+                        onIconRowHeight = { iconRowHeight = it },
+                        miniModifier = Modifier.draggable(drag, Orientation.Vertical, onDragStopped = { onDragStopped(it) }),
+                        modifier = Modifier.onSizeChanged { panelHeight = it.height },
+                    )
+                }
 
-        // Chrome: above the backdrop source, inside the same insets.
-        Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.systemBars)) {
-            AnimatedVisibility(
-                visible = onTab || open,
-                modifier = Modifier.align(Alignment.BottomCenter),
-                enter = slideInVertically(spring(dampingRatio = 0.85f, stiffness = 300f)) { it } + fadeIn(tween(200)),
-                exit = slideOutVertically(tween(240)) { it } + fadeOut(tween(160)),
-            ) {
-                BottomPanel(
-                    now = now,
-                    selected = TABS.indexOfFirst { it.route == if (open) Routes.PLAYER else route },
-                    progress = { expand.value },
-                    onTab = { target ->
-                        settle(0f)
-                        nav.goToTab(target)
-                    },
-                    onToggle = app.player::toggle,
-                    onOpenPlayer = { settle(1f) },
-                    onMiniArt = { miniArt = it },
-                    onIconRowHeight = { iconRowHeight = it },
-                    miniModifier = Modifier.draggable(drag, Orientation.Vertical, onDragStopped = { onDragStopped(it) }),
-                    modifier = Modifier.onSizeChanged { panelHeight = it.height },
-                )
+                // The artwork in flight: one picture, drawn at the full size and scaled down towards the
+                // mini player, so it is the same pixels all the way and nothing pops.
+                if (open && fullArt.width > 0f && miniArt.width > 0f) {
+                    Artwork(
+                        trackId = now.trackId,
+                        size = with(density) { fullArt.width.toDp() },
+                        corner = 28.dp,
+                        bitmap = now.artwork,
+                        modifier = Modifier.graphicsLayer {
+                            val p = expand.value
+                            val scale = (miniArt.width + (fullArt.width - miniArt.width) * p) / fullArt.width
+                            transformOrigin = TransformOrigin(0f, 0f)
+                            scaleX = scale
+                            scaleY = scale
+                            translationX = miniArt.left + (fullArt.left - miniArt.left) * p - origin.x
+                            translationY = miniArt.top + (fullArt.top - miniArt.top) * p - origin.y
+                            alpha = if (p >= SETTLED) 0f else 1f
+                        },
+                    )
+                }
             }
-
-            // The artwork in flight: one picture, drawn at the full size and scaled down towards the
-            // mini player, so it is the same pixels all the way and nothing pops.
-            if (open && fullArt.width > 0f && miniArt.width > 0f) {
-                Artwork(
-                    trackId = now.trackId,
-                    size = with(density) { fullArt.width.toDp() },
-                    corner = 28.dp,
-                    bitmap = now.artwork,
-                    modifier = Modifier.graphicsLayer {
-                        val p = expand.value
-                        val scale = (miniArt.width + (fullArt.width - miniArt.width) * p) / fullArt.width
-                        transformOrigin = TransformOrigin(0f, 0f)
-                        scaleX = scale
-                        scaleY = scale
-                        translationX = miniArt.left + (fullArt.left - miniArt.left) * p - origin.x
-                        translationY = miniArt.top + (fullArt.top - miniArt.top) * p - origin.y
-                        alpha = if (p >= SETTLED) 0f else 1f
-                    },
-                )
-            }
-        }
         }
     }
 }

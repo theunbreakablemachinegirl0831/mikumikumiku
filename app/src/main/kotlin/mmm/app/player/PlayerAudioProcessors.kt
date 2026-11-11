@@ -60,6 +60,11 @@ class EqAudioProcessor : BaseAudioProcessor() {
     }
 
     override fun queueInput(inputBuffer: ByteBuffer) {
+        // The pipeline also calls this with nothing to process - whenever the stage before has
+        // produced no output yet - and then hands over its one shared empty buffer. Before any
+        // audio has passed, this processor's own output buffer is that same shared buffer, and
+        // copying a buffer into itself is an error that stops playback.
+        if (!inputBuffer.hasRemaining()) return
         val format = inputAudioFormat
         val channels = format.channelCount
         val bytes = inputBuffer.remaining()
@@ -160,6 +165,8 @@ class SpectrumTapProcessor : BaseAudioProcessor() {
     }
 
     override fun queueInput(inputBuffer: ByteBuffer) {
+        // See EqAudioProcessor.queueInput: an empty call must not touch the shared empty buffer.
+        if (!inputBuffer.hasRemaining()) return
         val channels = inputAudioFormat.channelCount
         val bytes = inputBuffer.remaining()
         val input = inputBuffer.duplicate().order(ByteOrder.LITTLE_ENDIAN)
