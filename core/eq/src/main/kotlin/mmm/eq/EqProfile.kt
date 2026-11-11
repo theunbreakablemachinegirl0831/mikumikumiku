@@ -52,10 +52,13 @@ public data class EqProfile(
     public fun magnitudeDbAt(frequency: Double, sampleRate: Int = EqFilter.DESIGN_RATE): Double =
         preampDb + filters.sumOf { it.magnitudeDbAt(frequency, sampleRate) }
 
-    public fun response(grid: List<Double> = FrequencyResponse.logGrid()): FrequencyResponse =
-        FrequencyResponse(grid, grid.map { magnitudeDbAt(it) })
+    public fun response(grid: List<Double> = FrequencyResponse.logGrid()): FrequencyResponse {
+        // Designed once per filter rather than once per point: graphs redraw this while a slider moves.
+        val designed = filters.map { it.coefficients(EqFilter.DESIGN_RATE) }
+        return FrequencyResponse(grid, grid.map { f -> preampDb + designed.sumOf { it.magnitudeDbAt(f, EqFilter.DESIGN_RATE) } })
+    }
 
-    public fun createProcessor(): AudioProcessor = EqProcessor(this)
+    public fun createProcessor(): EqProcessor = EqProcessor(this)
 
     public fun toApoText(): String = buildString {
         append("Preamp: ").append(format(preampDb, 1)).append(" dB\n")
@@ -99,19 +102,40 @@ public data class EqProfile(
     }
 }
 
-/** Plays an [EqProfile]: the preamp, then the filters in series, rebuilt for the stream's rate. */
-internal class EqProcessor(private val profile: EqProfile) : AudioProcessor {
+/**
+ * Plays an [EqProfile]: the preamp, then the filters in series, rebuilt for the stream's rate.
+ *
+ * [update] swaps in another profile while playing. When the new profile has the same number of
+ * filters - a band being dragged, a gain being turned - the coefficients change in place and the
+ * filters keep their state, so the change is heard as a change and not as a click.
+ */
+public class EqProcessor internal constructor(profile: EqProfile) : AudioProcessor {
 
+    private var profile: EqProfile = profile
+    private var format: AudioFormat? = null
     private var cascade: BiquadCascade? = null
-    private val gain = 10.0.pow(profile.preampDb / 20.0).toFloat()
+    private var gain = gainOf(profile)
 
     override fun prepare(format: AudioFormat) {
-        val stages = BiquadCascade(profile.filters.size, format.channels)
-        profile.filters.forEachIndexed { index, filter ->
-            stages.setCoefficients(index, filter.coefficients(format.sampleRate))
+        this.format = format
+        cascade = build(format)
+    }
+
+    /** Call from the thread that calls [process]. */
+    public fun update(profile: EqProfile) {
+        val format = this.format
+        val current = cascade
+        val sameShape = profile.filters.size == this.profile.filters.size
+        this.profile = profile
+        gain = gainOf(profile)
+        if (format == null) return
+        if (current != null && sameShape) {
+            profile.filters.forEachIndexed { index, filter ->
+                current.setCoefficients(index, filter.coefficients(format.sampleRate))
+            }
+        } else {
+            cascade = build(format)
         }
-        stages.prepare(format)
-        cascade = stages
     }
 
     override fun process(buffer: AudioBuffer) {
@@ -127,4 +151,15 @@ internal class EqProcessor(private val profile: EqProfile) : AudioProcessor {
     override fun reset() {
         cascade?.reset()
     }
+
+    private fun build(format: AudioFormat): BiquadCascade {
+        val stages = BiquadCascade(profile.filters.size, format.channels)
+        profile.filters.forEachIndexed { index, filter ->
+            stages.setCoefficients(index, filter.coefficients(format.sampleRate))
+        }
+        stages.prepare(format)
+        return stages
+    }
+
+    private fun gainOf(profile: EqProfile): Float = 10.0.pow(profile.preampDb / 20.0).toFloat()
 }

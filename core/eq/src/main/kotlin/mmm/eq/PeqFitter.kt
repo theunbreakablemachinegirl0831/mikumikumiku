@@ -39,6 +39,35 @@ public data class PeqFitSettings(
     }
 }
 
+/**
+ * One instruction to the fitter: between [fromHz] and [toHz], sound like [target] - a target curve
+ * or another earphone's measurement.
+ */
+public data class MatchRule(
+    val target: FrequencyResponse,
+    val fromHz: Double = 20.0,
+    val toHz: Double = 20000.0,
+) {
+    init {
+        require(fromHz > 0 && toHz > fromHz) { "range must run upwards from above 0 Hz" }
+    }
+
+    /** 1 inside the range, falling to 0 over [EDGE_OCTAVES] beyond either end. */
+    internal fun weightAt(frequency: Double): Double {
+        val outside = when {
+            frequency < fromHz -> log2(fromHz / frequency)
+            frequency > toHz -> log2(frequency / toHz)
+            else -> return 1.0
+        }
+        if (outside >= EDGE_OCTAVES) return 0.0
+        return 0.5 * (1.0 + kotlin.math.cos(Math.PI * outside / EDGE_OCTAVES))
+    }
+
+    internal companion object {
+        const val EDGE_OCTAVES = 1.0 / 3
+    }
+}
+
 public data class PeqFitResult(
     val profile: EqProfile,
     /** What the EQ was asked to do: target minus measurement, centred on the midrange. */
@@ -65,10 +94,40 @@ public class PeqFitter(private val settings: PeqFitSettings = PeqFitSettings.DEF
     private val grid = FrequencyResponse.logGrid(20.0, 20000.0, POINTS_PER_OCTAVE)
     private val n = grid.size
 
-    public fun fit(measured: FrequencyResponse, target: FrequencyResponse): PeqFitResult {
+    public fun fit(measured: FrequencyResponse, target: FrequencyResponse): PeqFitResult =
+        fitWanted(measured, difference(measured, target))
+
+    /**
+     * Fits one EQ to several [rules] at once: each asks for its own target, inside its own
+     * stretch of the spectrum, and nothing outside any of them is touched. The differences are
+     * blended across a third of an octave at each edge and fitted together, so the filters see
+     * one curve rather than several that disagree where they meet.
+     */
+    public fun fitRules(measured: FrequencyResponse, rules: List<MatchRule>): PeqFitResult {
+        require(rules.isNotEmpty()) { "need at least one rule" }
+        val sum = DoubleArray(n)
+        val cover = DoubleArray(n)
+        for (rule in rules) {
+            val wanted = difference(measured, rule.target)
+            for (i in 0 until n) {
+                val w = rule.weightAt(grid[i])
+                sum[i] += w * wanted.decibels[i]
+                cover[i] += w
+            }
+        }
+        // Where rules overlap they are averaged; where only the edge of one reaches, it fades out.
+        return fitWanted(measured, FrequencyResponse(grid, List(n) { i -> if (cover[i] > 1.0) sum[i] / cover[i] else sum[i] }))
+    }
+
+    /** Target minus measurement on the fitting grid, with the midrange of the two lined up. */
+    private fun difference(measured: FrequencyResponse, target: FrequencyResponse): FrequencyResponse {
         val fraction = settings.smoothingFraction
         val raw = (target.smooth(fraction) - measured.smooth(fraction)).resample(grid)
-        val wanted = raw.shifted(-meanOver(raw, CENTRE_FROM_HZ, CENTRE_TO_HZ))
+        return raw.shifted(-meanOver(raw, CENTRE_FROM_HZ, CENTRE_TO_HZ))
+    }
+
+    private fun fitWanted(measured: FrequencyResponse, wanted: FrequencyResponse): PeqFitResult {
+        val fraction = settings.smoothingFraction
 
         // Above the detail limit the fitter only sees the octave-smoothed trend, which a shelf can follow.
         val trend = wanted.smooth(1)
