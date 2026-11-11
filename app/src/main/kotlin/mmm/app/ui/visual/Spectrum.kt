@@ -18,8 +18,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.lerp
+import mmm.app.data.VisualizerColor
 import mmm.app.player.SpectrumTap
 import mmm.app.sessioneq.SessionEqService
+import mmm.app.ui.components.glass.LocalBackdropTint
+import mmm.app.ui.theme.GlassTheme
 import mmm.dsp.Fft
 import kotlin.math.cos
 import kotlin.math.exp
@@ -158,6 +162,34 @@ class SpectrumAnalyzer(val points: Int) {
         const val FALL_SECONDS = 0.22
         const val MIN_SAMPLES = 256
         val LN2 = ln(2.0)
+    }
+}
+
+/**
+ * The colour to draw a spectrum in, for the listener's [choice].
+ *
+ * The same choice has to work in two places that have nothing in common: over artwork, which
+ * can be any colour and is given a dark scrim, and on the EQ graph, which is drawn on the theme's
+ * ground. So the default is white on artwork and the ink on the graph, the album colour is
+ * lifted towards white on artwork and on dark and deepened on light, and a fixed colour is
+ * deepened on a light graph, where a pastel would otherwise disappear.
+ *
+ * @param onArtwork drawn over a picture rather than on the theme's ground
+ */
+@Composable
+fun visualizerColor(choice: VisualizerColor, onArtwork: Boolean): Color {
+    val colors = GlassTheme.colors
+    val bright = onArtwork || colors.isDark
+    return when (choice) {
+        VisualizerColor.DEFAULT -> if (onArtwork) Color.White else colors.ink
+        VisualizerColor.ALBUM -> {
+            val tint = LocalBackdropTint.current
+            if (bright) lerp(tint, Color.White, if (onArtwork) 0.6f else 0.45f) else lerp(tint, Color.Black, 0.3f)
+        }
+        else -> {
+            val fixed = Color(choice.argb ?: 0xFFFFFFFF)
+            if (bright) fixed else lerp(fixed, Color.Black, 0.35f)
+        }
     }
 }
 

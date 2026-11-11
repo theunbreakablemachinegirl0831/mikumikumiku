@@ -6,7 +6,14 @@ import android.content.pm.PackageManager
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -18,7 +25,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -27,16 +40,45 @@ import mmm.app.BuildConfig
 import mmm.app.MmmApplication
 import mmm.app.data.PlaybackEq
 import mmm.app.data.TrainerSettings
+import mmm.app.data.VisualizerColor
 import mmm.app.ui.components.glass.GroupCard
 import mmm.app.ui.components.glass.GroupDivider
 import mmm.app.ui.components.glass.LocalPanelInset
 import mmm.app.ui.components.glass.PillTabs
 import mmm.app.ui.components.glass.backdropBlurSupported
+import mmm.app.ui.theme.GlassDimensions
+import mmm.app.ui.theme.GlassShapes
+import mmm.app.ui.theme.GlassTheme
 import mmm.app.ui.theme.ThemeMode
+import mmm.app.ui.visual.visualizerColor
 import mmm.app.ui.components.glass.GlassTopBar
 import mmm.app.ui.components.glass.SectionHeader
 import mmm.app.ui.components.glass.SettingRow
 import mmm.app.ui.components.glass.Switch
+
+/** One colour to choose: a disc of it, ringed in the ink when it is the one in use. */
+@Composable
+private fun Swatch(color: Color, label: String, selected: Boolean, onClick: () -> Unit) {
+    val colors = GlassTheme.colors
+    Box(
+        Modifier
+            .size(GlassDimensions.touchTarget)
+            .semantics {
+                contentDescription = label
+                this.selected = selected
+            }
+            .clickable(role = Role.RadioButton, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            Modifier
+                .size(if (selected) 40.dp else 32.dp)
+                .border(if (selected) 3.dp else 1.dp, if (selected) colors.ink else colors.inkFaint, GlassShapes.circle)
+                .padding(if (selected) 6.dp else 0.dp)
+                .background(color, GlassShapes.circle),
+        )
+    }
+}
 
 /**
  * Everything that is a setting rather than a control, in one place, grouped as the reference
@@ -168,6 +210,29 @@ fun SettingsScreen(app: MmmApplication, onOpenEarphones: () -> Unit) {
                 )
                 Text(
                     "20 Hz–20 kHz를 ${settings.visualizerPoints}개 점으로 그린다. 촘촘할수록 긴 구간을 분석해 저역의 음 하나하나가 갈라져 보이고, 그만큼 계산이 는다.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+            GroupDivider()
+            Column(Modifier.padding(horizontal = 18.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row {
+                    Text("비주얼라이저 색", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                    Text(settings.visualizerColor.label, style = MaterialTheme.typography.bodyLarge, color = GlassTheme.colors.inkMuted)
+                }
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    VisualizerColor.entries.forEach { option ->
+                        Swatch(
+                            // Shown as it will look over artwork, where it is seen most.
+                            color = visualizerColor(option, onArtwork = true),
+                            label = option.label,
+                            selected = settings.visualizerColor == option,
+                            onClick = { app.settings.setVisualizerColor(option) },
+                        )
+                    }
+                }
+                Text(
+                    "앨범아트 위와 재생 EQ 그래프의 스펙트럼에 쓰인다. '기본'은 아트 위에서는 흰색, 그래프에서는 글자색이고, " +
+                        "'앨범 색'은 지금 곡의 앨범아트 색을 따라간다.",
                     style = MaterialTheme.typography.bodySmall,
                 )
             }

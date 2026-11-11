@@ -86,6 +86,7 @@ import mmm.app.ui.visual.PlayerSpectrumSource
 import mmm.app.ui.visual.SpectrumSource
 import mmm.app.ui.visual.drawSpectrum
 import mmm.app.ui.visual.rememberSpectrum
+import mmm.app.ui.visual.visualizerColor
 import kotlin.math.roundToInt
 
 /**
@@ -130,6 +131,7 @@ fun NowPlayingScreen(
                 source = PlayerSpectrumSource,
                 points = settings.visualizerPoints,
                 showSpectrum = settings.artVisualizer,
+                spectrumColor = visualizerColor(settings.visualizerColor, onArtwork = true),
                 modifier = Modifier
                     .aspectRatio(1f)
                     .onGloballyPositioned { onArtBounds(it.boundsInRoot()) }
@@ -272,6 +274,7 @@ fun ArtWithSpectrum(
     source: SpectrumSource,
     points: Int,
     showSpectrum: Boolean,
+    spectrumColor: Color = Color.White,
     modifier: Modifier = Modifier,
     corner: Dp = 28.dp,
 ) {
@@ -296,7 +299,7 @@ fun ArtWithSpectrum(
                     topLeft = area.topLeft,
                     size = area.size,
                 )
-                drawSpectrum(spectrum.levels, area, fillAlpha = 0.42f, lineAlpha = 0.95f)
+                drawSpectrum(spectrum.levels, area, color = spectrumColor, fillAlpha = 0.42f, lineAlpha = 0.95f)
             }
         }
     }

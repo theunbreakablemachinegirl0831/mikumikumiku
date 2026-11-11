@@ -21,6 +21,22 @@ import mmm.training.FrequencyRange
 import kotlin.math.asinh
 import kotlin.math.ln
 
+/**
+ * What colour the spectrum displays are drawn in. [argb] is null for the two that are not a fixed
+ * colour: the default follows the theme, and the album one follows the artwork.
+ */
+enum class VisualizerColor(val label: String, val argb: Long?) {
+    DEFAULT("기본", null),
+    ALBUM("앨범 색", null),
+    SKY("하늘", 0xFF6CC8FF),
+    MINT("민트", 0xFF5EE6B8),
+    LIME("라임", 0xFFB8F05A),
+    YELLOW("노랑", 0xFFFFD75E),
+    ORANGE("주황", 0xFFFF9F5A),
+    PINK("분홍", 0xFFFF7EB6),
+    VIOLET("보라", 0xFFB48CFF),
+}
+
 /** Where the audio for the exercises comes from. */
 sealed interface SourceChoice {
     val label: String
@@ -57,6 +73,7 @@ data class TrainerSettings(
     val visualizerPoints: Int = DEFAULT_VISUALIZER_POINTS,
     /** Draw the spectrum over the album art. */
     val artVisualizer: Boolean = true,
+    val visualizerColor: VisualizerColor = VisualizerColor.DEFAULT,
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     /** Blur what is behind floating glass, where the device can (Android 12 and later). */
     val backdropBlur: Boolean = true,
@@ -140,6 +157,8 @@ class SettingsRepository(
 
     fun setArtVisualizer(on: Boolean) = update { it[ART_VISUALIZER] = on }
 
+    fun setVisualizerColor(color: VisualizerColor) = update { it[VISUALIZER_COLOR] = color.name }
+
     fun setThemeMode(mode: ThemeMode) = update { it[THEME_MODE] = mode.name }
 
     fun setBackdropBlur(on: Boolean) = update { it[BACKDROP_BLUR] = on }
@@ -197,6 +216,8 @@ class SettingsRepository(
             visualizerPoints = prefs[VISUALIZER_POINTS]?.takeIf { it in TrainerSettings.VISUALIZER_POINTS }
                 ?: TrainerSettings.DEFAULT_VISUALIZER_POINTS,
             artVisualizer = prefs[ART_VISUALIZER] ?: true,
+            visualizerColor = prefs[VISUALIZER_COLOR]?.let { name -> VisualizerColor.entries.firstOrNull { it.name == name } }
+                ?: VisualizerColor.DEFAULT,
             themeMode = prefs[THEME_MODE]?.let { name -> ThemeMode.entries.firstOrNull { it.name == name } } ?: ThemeMode.SYSTEM,
             backdropBlur = prefs[BACKDROP_BLUR] ?: true,
         )
@@ -214,6 +235,7 @@ class SettingsRepository(
         val HUB_CARDS = booleanPreferencesKey("settings_hub_cards")
         val VISUALIZER_POINTS = intPreferencesKey("settings_visualizer_points")
         val ART_VISUALIZER = booleanPreferencesKey("settings_art_visualizer")
+        val VISUALIZER_COLOR = stringPreferencesKey("settings_visualizer_color")
         val THEME_MODE = stringPreferencesKey("settings_theme_mode")
         val BACKDROP_BLUR = booleanPreferencesKey("settings_backdrop_blur")
         val RANGE_LOW = doublePreferencesKey("settings_range_low")

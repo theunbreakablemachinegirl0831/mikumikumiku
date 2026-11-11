@@ -40,6 +40,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
@@ -49,6 +50,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import mmm.app.MmmApplication
 import mmm.app.data.PeqBand
 import mmm.app.data.PlaybackEq
+import mmm.app.data.VisualizerColor
 import mmm.app.sessioneq.SessionEqService
 import mmm.app.ui.components.glass.GlassButton
 import mmm.app.ui.components.glass.LocalPanelInset
@@ -60,6 +62,7 @@ import mmm.app.ui.components.glass.glass
 import mmm.app.ui.visual.PlayerSpectrumSource
 import mmm.app.ui.visual.VisualizerSpectrumSource
 import mmm.app.ui.visual.rememberSpectrum
+import mmm.app.ui.visual.visualizerColor
 import mmm.eq.EqFilterType
 import mmm.eq.EqProfile
 import mmm.eq.EqStack
@@ -220,6 +223,11 @@ fun EqScreen(app: MmmApplication, onOpenEarphones: () -> Unit, onFindEarphone: (
             EqGraph(
                 total = total,
                 spectrum = spectrum,
+                spectrumColor = if (settings.visualizerColor == VisualizerColor.DEFAULT) {
+                    Color.Unspecified
+                } else {
+                    visualizerColor(settings.visualizerColor, onArtwork = false)
+                },
                 layer = editing,
                 active = state.enabled,
                 nodes = if (tab == TAB_PEQ) state.peq else emptyList(),

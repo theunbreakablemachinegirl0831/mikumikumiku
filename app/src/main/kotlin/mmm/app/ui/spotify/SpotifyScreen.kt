@@ -59,6 +59,7 @@ import mmm.app.ui.components.glass.LocalPanelInset
 import mmm.app.ui.components.glass.Switch
 import mmm.app.ui.components.glass.glass
 import mmm.app.ui.visual.VisualizerSpectrumSource
+import mmm.app.ui.visual.visualizerColor
 
 /**
  * Spotify, in the shape of the player: what it is playing, with the same artwork, spectrum and
@@ -125,7 +126,13 @@ fun SpotifyScreen(app: MmmApplication, onOpenEq: () -> Unit) {
         }
 
         if (external.hasSession) {
-            Playing(app, external, settings.visualizerPoints, settings.artVisualizer && status.sessions.any { it.error == null })
+            Playing(
+                app = app,
+                external = external,
+                points = settings.visualizerPoints,
+                showSpectrum = settings.artVisualizer && status.sessions.any { it.error == null },
+                spectrumColor = visualizerColor(settings.visualizerColor, onArtwork = true),
+            )
         } else {
             Column(Modifier.fillMaxWidth().glass().padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (external.access) {
@@ -151,7 +158,7 @@ fun SpotifyScreen(app: MmmApplication, onOpenEq: () -> Unit) {
 }
 
 @Composable
-private fun Playing(app: MmmApplication, external: ExternalNowPlaying, points: Int, showSpectrum: Boolean) {
+private fun Playing(app: MmmApplication, external: ExternalNowPlaying, points: Int, showSpectrum: Boolean, spectrumColor: Color) {
     // The session reports its position only when it jumps; in between it is worked out from the clock.
     var position by remember { mutableLongStateOf(external.positionNow()) }
     LaunchedEffect(external.positionMs, external.positionAt, external.isPlaying) {
@@ -169,6 +176,7 @@ private fun Playing(app: MmmApplication, external: ExternalNowPlaying, points: I
             source = VisualizerSpectrumSource,
             points = points,
             showSpectrum = showSpectrum,
+            spectrumColor = spectrumColor,
             modifier = Modifier.fillMaxWidth().aspectRatio(1f),
         )
     }

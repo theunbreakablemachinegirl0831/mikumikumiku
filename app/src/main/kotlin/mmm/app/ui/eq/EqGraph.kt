@@ -53,6 +53,7 @@ fun EqGraph(
     spectrum: SpectrumState?,
     modifier: Modifier = Modifier,
     layer: List<EqFilter>? = null,
+    spectrumColor: Color = Color.Unspecified,
     active: Boolean = true,
     nodes: List<PeqBand> = emptyList(),
     selectedNode: Int = -1,
@@ -118,7 +119,16 @@ fun EqGraph(
         clipRect(plot.left, plot.top, plot.right, plot.bottom) {
             if (spectrum != null) {
                 spectrum.frame // read so the spectrum redraws every frame
-                drawSpectrum(spectrum.levels, plot, color = ink, fillAlpha = 0.20f, lineAlpha = 0.35f, gain = 0.92f)
+                // A chosen colour is drawn stronger than the default ink: it is there to be seen.
+                val chosen = spectrumColor != Color.Unspecified
+                drawSpectrum(
+                    spectrum.levels,
+                    plot,
+                    color = if (chosen) spectrumColor else ink,
+                    fillAlpha = if (chosen) 0.30f else 0.20f,
+                    lineAlpha = if (chosen) 0.70f else 0.35f,
+                    gain = 0.92f,
+                )
             }
 
             if (layerCurve != null) drawPath(curve(layerCurve, plot), ink.copy(alpha = 0.3f), style = Stroke(1.5f * density))
