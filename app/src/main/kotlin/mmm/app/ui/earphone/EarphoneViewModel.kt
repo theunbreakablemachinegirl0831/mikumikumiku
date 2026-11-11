@@ -140,7 +140,7 @@ class EarphoneViewModel(private val app: MmmApplication, private val id: String)
 
     fun use() {
         app.settings.setActiveEarphone(id)
-        app.settings.setEqEnabled(true)
+        app.eq.update { it.copy(enabled = true, autoEnabled = true) }
     }
 
     fun delete(onDone: () -> Unit) {

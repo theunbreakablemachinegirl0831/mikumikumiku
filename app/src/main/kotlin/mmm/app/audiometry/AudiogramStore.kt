@@ -2,6 +2,9 @@ package mmm.app.audiometry
 
 import android.content.Context
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
 import mmm.training.audiometry.AudiogramResult
 import mmm.training.audiometry.Ear
@@ -14,6 +17,11 @@ import java.io.File
 class AudiogramStore(context: Context) {
 
     private val file = File(context.filesDir, "audiogram.json")
+
+    private val _latest = MutableStateFlow<AudiogramResult?>(null)
+
+    /** The stored test, once [load] has read it or [save] has replaced it. */
+    val latest: StateFlow<AudiogramResult?> = _latest.asStateFlow()
 
     suspend fun save(result: AudiogramResult) = withContext(Dispatchers.IO) {
         val json = JSONObject().apply {
@@ -34,6 +42,7 @@ class AudiogramStore(context: Context) {
             })
         }
         file.writeText(json.toString())
+        _latest.value = result
     }
 
     suspend fun load(): AudiogramResult? = withContext(Dispatchers.IO) {
@@ -58,6 +67,6 @@ class AudiogramStore(context: Context) {
                 earphoneName = if (json.isNull("earphone")) null else json.getString("earphone"),
                 timestampMillis = json.getLong("timestamp"),
             )
-        }.getOrNull()
+        }.getOrNull().also { _latest.value = it }
     }
 }

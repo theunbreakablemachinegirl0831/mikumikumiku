@@ -4,6 +4,7 @@ import android.util.LruCache
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -75,7 +76,7 @@ fun Artwork(
                 .background(Brush.linearGradient(listOf(Color(0xFF6A5ACD), Color(0xFF2B2D5C)))),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(Icons.Rounded.MusicNote, contentDescription = null, tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(size / 2.5f))
+            Icon(Icons.Rounded.MusicNote, contentDescription = null, tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.fillMaxSize(0.4f))
         }
     }
 }

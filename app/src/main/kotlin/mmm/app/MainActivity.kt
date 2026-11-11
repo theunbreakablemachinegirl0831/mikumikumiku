@@ -18,4 +18,10 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    override fun onStart() {
+        super.onStart()
+        // The service that puts the EQ on other apps may only be started while on screen.
+        (application as MmmApplication).syncSystemEq()
+    }
 }

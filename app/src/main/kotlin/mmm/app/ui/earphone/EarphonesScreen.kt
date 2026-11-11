@@ -51,22 +51,9 @@ fun EarphonesScreen(app: MmmApplication, onBack: (() -> Unit)?, onOpen: (String)
             ScreenHeader(title = "이어폰", onBack = onBack)
             Text(
                 "이어폰마다 공개된 B&K 5128 측정치를 넣고 타깃을 고르면, 그 타깃에 맞추는 EQ를 만든다. " +
-                    "고른 이어폰의 EQ는 훈련과 실시간 모드 모두에 걸린다.",
+                    "고른 이어폰이 재생 EQ의 자동 EQ와 청력 검사의 기준이 된다.",
                 style = MaterialTheme.typography.bodySmall,
             )
-
-            Card {
-                Row(Modifier.padding(16.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text("이어폰 EQ 적용", style = MaterialTheme.typography.titleMedium)
-                        Text(
-                            "끄면 고른 이어폰이 있어도 원래 소리 그대로 재생한다.",
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                    }
-                    Switch(checked = settings.eqEnabled, onCheckedChange = app.settings::setEqEnabled)
-                }
-            }
 
             if (earphones.isEmpty()) {
                 Text("아직 등록한 이어폰이 없다.", style = MaterialTheme.typography.bodyMedium)

@@ -46,16 +46,25 @@ data class TrainerSettings(
     val filterGainDb: Double? = null,
     /** Filter Q for Band ID and resonance, or null to follow the difficulty ladder. */
     val filterQ: Double? = null,
-    /** The earphone being listened on, whose EQ is applied when [eqEnabled]. */
+    /** The earphone being listened on: the one the automatic EQ corrects and the hearing test is calibrated by. */
     val activeEarphoneId: String? = null,
-    val eqEnabled: Boolean = true,
     /** The range Band ID and resonance practise in, or null for the whole spectrum. */
     val practiceRange: FrequencyRange? = null,
+    /** Tests and exercises as cards rather than a list. */
+    val hubCards: Boolean = false,
+    /** Points across the spectrum displays, 20 Hz to 20 kHz. */
+    val visualizerPoints: Int = DEFAULT_VISUALIZER_POINTS,
+    /** Draw the spectrum over the album art. */
+    val artVisualizer: Boolean = true,
 ) {
     fun filterOverrides(): FilterOverrides = FilterOverrides(gainDb = filterGainDb, q = filterQ)
 
     companion object {
         const val DEFAULT_EXCERPT_SECONDS = 8
+
+        /** Spectrum resolutions on offer: a sixth, twelfth, twenty-fourth and forty-eighth of an octave per point. */
+        val VISUALIZER_POINTS = listOf(60, 120, 240, 480)
+        const val DEFAULT_VISUALIZER_POINTS = 240
         val EXCERPT_RANGE = 4..15
 
         /** 0.5 dB steps. The floor is audible on noise; the ceiling is where the ladder starts. */
@@ -121,7 +130,11 @@ class SettingsRepository(
         }
     }
 
-    fun setEqEnabled(on: Boolean) = update { it[EQ_ENABLED] = on }
+    fun setHubCards(on: Boolean) = update { it[HUB_CARDS] = on }
+
+    fun setVisualizerPoints(points: Int) = update { it[VISUALIZER_POINTS] = points }
+
+    fun setArtVisualizer(on: Boolean) = update { it[ART_VISUALIZER] = on }
 
     fun setPracticeRange(range: FrequencyRange?) = update { prefs ->
         if (range == null) {
@@ -171,8 +184,11 @@ class SettingsRepository(
             filterGainDb = prefs[FILTER_GAIN_DB],
             filterQ = prefs[FILTER_Q],
             activeEarphoneId = prefs[ACTIVE_EARPHONE],
-            eqEnabled = prefs[EQ_ENABLED] ?: true,
             practiceRange = rangeOf(prefs[RANGE_LOW], prefs[RANGE_HIGH]),
+            hubCards = prefs[HUB_CARDS] ?: false,
+            visualizerPoints = prefs[VISUALIZER_POINTS]?.takeIf { it in TrainerSettings.VISUALIZER_POINTS }
+                ?: TrainerSettings.DEFAULT_VISUALIZER_POINTS,
+            artVisualizer = prefs[ART_VISUALIZER] ?: true,
         )
     }
 
@@ -185,7 +201,9 @@ class SettingsRepository(
         val FILTER_GAIN_DB = doublePreferencesKey("settings_filter_gain_db")
         val FILTER_Q = doublePreferencesKey("settings_filter_q")
         val ACTIVE_EARPHONE = stringPreferencesKey("settings_active_earphone")
-        val EQ_ENABLED = booleanPreferencesKey("settings_eq_enabled")
+        val HUB_CARDS = booleanPreferencesKey("settings_hub_cards")
+        val VISUALIZER_POINTS = intPreferencesKey("settings_visualizer_points")
+        val ART_VISUALIZER = booleanPreferencesKey("settings_art_visualizer")
         val RANGE_LOW = doublePreferencesKey("settings_range_low")
         val RANGE_HIGH = doublePreferencesKey("settings_range_high")
         const val KIND_PINK = "pink"

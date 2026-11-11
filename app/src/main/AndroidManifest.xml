@@ -41,7 +41,7 @@
             </intent-filter>
         </service>
 
-        <!-- Applies the earphone EQ to other apps' announced audio sessions (Spotify). It plays
+        <!-- Applies the playback EQ to other apps' announced audio sessions (Spotify). It plays
              nothing itself, so none of the media service types fit. -->
         <service
             android:name=".sessioneq.SessionEqService"
@@ -50,6 +50,18 @@
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Applies the user's headphone equaliser to audio sessions other music apps announce" />
+        </service>
+
+        <!-- Lets the Spotify tab see what other music apps are playing. The system only lists
+             active media sessions for notification listeners; this one reads no notifications. -->
+        <service
+            android:name=".spotify.MediaAccessService"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
         </service>
     </application>
 </manifest>

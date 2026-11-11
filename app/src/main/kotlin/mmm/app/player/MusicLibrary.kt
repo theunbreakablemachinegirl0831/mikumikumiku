@@ -20,6 +20,8 @@ data class Track(
     val album: String,
     val durationMs: Long,
     val artworkUri: Uri?,
+    /** The folder the file is in, relative to the storage root, without a trailing slash. */
+    val folder: String = "",
 ) {
     fun toMediaItem(): MediaItem = MediaItem.Builder()
         .setMediaId(id.toString())
@@ -54,6 +56,7 @@ class MusicLibrary(private val context: Context) {
             MediaStore.Audio.Media.ALBUM,
             MediaStore.Audio.Media.DURATION,
             MediaStore.Audio.Media.ALBUM_ID,
+            MediaStore.Audio.Media.RELATIVE_PATH,
         )
         val result = ArrayList<Track>()
         context.contentResolver.query(
@@ -69,6 +72,7 @@ class MusicLibrary(private val context: Context) {
             val album = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM)
             val duration = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
             val albumId = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID)
+            val path = cursor.getColumnIndex(MediaStore.Audio.Media.RELATIVE_PATH)
             while (cursor.moveToNext()) {
                 val trackId = cursor.getLong(id)
                 result += Track(
@@ -79,6 +83,7 @@ class MusicLibrary(private val context: Context) {
                     album = cursor.getString(album) ?: "",
                     durationMs = cursor.getLong(duration),
                     artworkUri = ContentUris.withAppendedId(ALBUM_ART, cursor.getLong(albumId)),
+                    folder = if (path >= 0) cursor.getString(path).orEmpty().trimEnd('/') else "",
                 )
             }
         }

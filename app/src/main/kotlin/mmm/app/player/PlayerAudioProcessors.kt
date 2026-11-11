@@ -8,32 +8,46 @@ import androidx.media3.common.audio.AudioProcessor
 import androidx.media3.common.audio.BaseAudioProcessor
 import androidx.media3.common.util.UnstableApi
 import mmm.dsp.AudioBuffer
+import mmm.dsp.artifacts.TubeProcessor
+import mmm.dsp.artifacts.TubeSettings
+import mmm.eq.EqProcessor
 import mmm.eq.EqProfile
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.random.Random
 
 /**
- * The earphone EQ inside ExoPlayer's audio pipeline.
+ * The playback EQ and the valve harmonics inside ExoPlayer's audio pipeline.
  *
  * Works on 16-bit PCM because that is what the pipeline hands its processors once float output is
- * off; the samples are filtered in float and dithered back to 16 bits, so the EQ's preamp - which
+ * off; the samples are processed in float and dithered back to 16 bits, so the EQ's preamp - which
  * leaves the loudest boost just under full scale - is what keeps it from clipping.
  *
- * The profile is swapped from the UI thread and picked up on the audio thread at the next buffer;
- * building a new filter chain allocates, which is acceptable at the moment the EQ changes.
+ * Settings are swapped from the UI thread and picked up on the audio thread at the next buffer.
+ * An EQ that only changed its numbers is updated in place, so dragging a band does not click;
+ * anything else builds a new chain, which allocates, at the moment the listener changed something.
  */
 class EqAudioProcessor : BaseAudioProcessor() {
 
     @Volatile private var requested: EqProfile? = null
+    @Volatile private var requestedTube: TubeSettings? = null
     @Volatile private var dirty = true
 
-    private var processor: mmm.dsp.AudioProcessor? = null
+    private var eq: EqProcessor? = null
+    private var tube: TubeProcessor? = null
+    private var tubeFor: TubeSettings? = null
+    private var builtRate = 0
+    private var builtChannels = 0
     private var block = AudioBuffer(2, BLOCK_FRAMES)
     private val random = Random(0x5EED)
 
     fun setProfile(profile: EqProfile?) {
         requested = profile
+        dirty = true
+    }
+
+    fun setTube(settings: TubeSettings?) {
+        requestedTube = settings
         dirty = true
     }
 
@@ -50,10 +64,11 @@ class EqAudioProcessor : BaseAudioProcessor() {
         val channels = format.channelCount
         val bytes = inputBuffer.remaining()
         val output = replaceOutputBuffer(bytes)
-        if (dirty) rebuild(format)
+        if (dirty) refresh(format)
 
-        val active = processor
-        if (active == null) {
+        val activeEq = eq
+        val activeTube = tube
+        if (activeEq == null && activeTube == null) {
             output.put(inputBuffer)
             output.flip()
             return
@@ -68,7 +83,8 @@ class EqAudioProcessor : BaseAudioProcessor() {
             for (i in 0 until count) {
                 for (ch in 0 until channels) block.data[ch][i] = input.short / 32768f
             }
-            active.process(block)
+            activeEq?.process(block)
+            activeTube?.process(block)
             for (i in 0 until count) {
                 for (ch in 0 until channels) {
                     // TPDF dither: two uniform values summed, one LSB peak to peak each.
@@ -83,20 +99,40 @@ class EqAudioProcessor : BaseAudioProcessor() {
     }
 
     override fun onFlush() {
-        processor?.reset()
+        eq?.reset()
+        tube?.reset()
     }
 
     override fun onReset() {
-        processor = null
+        eq = null
+        tube = null
+        tubeFor = null
         dirty = true
     }
 
-    private fun rebuild(format: AudioProcessor.AudioFormat) {
+    private fun refresh(format: AudioProcessor.AudioFormat) {
         dirty = false
         val profile = requested
-        if (block.channels != format.channelCount) block = AudioBuffer(format.channelCount, BLOCK_FRAMES)
-        processor = profile?.createProcessor()?.also {
-            it.prepare(mmm.dsp.AudioFormat(format.sampleRate, format.channelCount, BLOCK_FRAMES))
+        val wantedTube = requestedTube
+        if (format.sampleRate != builtRate || format.channelCount != builtChannels) {
+            builtRate = format.sampleRate
+            builtChannels = format.channelCount
+            block = AudioBuffer(format.channelCount, BLOCK_FRAMES)
+            eq = null
+            tube = null
+            tubeFor = null
+        }
+        val dsp = mmm.dsp.AudioFormat(format.sampleRate, format.channelCount, BLOCK_FRAMES)
+
+        val current = eq
+        when {
+            profile == null -> eq = null
+            current != null -> current.update(profile)
+            else -> eq = profile.createProcessor().also { it.prepare(dsp) }
+        }
+        if (wantedTube != tubeFor || (wantedTube != null && tube == null)) {
+            tubeFor = wantedTube
+            tube = wantedTube?.let { settings -> TubeProcessor(settings).also { it.prepare(dsp) } }
         }
     }
 
