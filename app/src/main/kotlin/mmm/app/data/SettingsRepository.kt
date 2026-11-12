@@ -1,0 +1,341 @@
+package mmm.app.data
+
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.MutablePreferences
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.doublePreferencesKey
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
+import mmm.app.ui.theme.ThemeMode
+import mmm.training.FilterOverrides
+import mmm.training.FrequencyRange
+import kotlin.math.asinh
+import kotlin.math.ln
+
+/**
+ * What colour the spectrum displays are drawn in. [argb] is null for the two that are not a fixed
+ * colour: the default follows the theme, and the album one follows the artwork.
+ */
+enum class VisualizerColor(val label: String, val argb: Long?) {
+    DEFAULT("기본", null),
+    ALBUM("앨범 색", null),
+    SKY("하늘", 0xFF6CC8FF),
+    MINT("민트", 0xFF5EE6B8),
+    LIME("라임", 0xFFB8F05A),
+    YELLOW("노랑", 0xFFFFD75E),
+    ORANGE("주황", 0xFFFF9F5A),
+    PINK("분홍", 0xFFFF7EB6),
+    VIOLET("보라", 0xFFB48CFF),
+    /** One colour the listener picked. */
+    CUSTOM("사용자 지정", null),
+    /** Two colours the listener picked, from the bass end to the treble end. */
+    GRADIENT("그라데이션", null),
+}
+
+/** Where the audio for the exercises comes from. */
+sealed interface SourceChoice {
+    val label: String
+
+    /** Generated on the spot, so the app works before the learner has chosen anything. */
+    data object PinkNoise : SourceChoice {
+        override val label: String get() = "핑크 노이즈"
+    }
+
+    data class File(val uri: String, val name: String) : SourceChoice {
+        override val label: String get() = name
+    }
+}
+
+data class TrainerSettings(
+    /**
+     * On by default and only switchable for demonstration: without it a boosted band is also a
+     * louder band, and the exercise can be answered on level alone.
+     */
+    val loudnessMatched: Boolean = true,
+    val excerptSeconds: Int = DEFAULT_EXCERPT_SECONDS,
+    val source: SourceChoice = SourceChoice.PinkNoise,
+    /** Boost size for Band ID and resonance, or null to follow the difficulty ladder. */
+    val filterGainDb: Double? = null,
+    /** Filter Q for Band ID and resonance, or null to follow the difficulty ladder. */
+    val filterQ: Double? = null,
+    /** The earphone being listened on: the one the automatic EQ corrects and the hearing test is calibrated by. */
+    val activeEarphoneId: String? = null,
+    /** The range Band ID and resonance practise in, or null for the whole spectrum. */
+    val practiceRange: FrequencyRange? = null,
+    /** Tests and exercises as cards rather than a list. */
+    val hubCards: Boolean = false,
+    /** Points across the spectrum displays, 20 Hz to 20 kHz. */
+    val visualizerPoints: Int = DEFAULT_VISUALIZER_POINTS,
+    /** Draw the spectrum over the album art. */
+    val artVisualizer: Boolean = true,
+    val visualizerColor: VisualizerColor = VisualizerColor.DEFAULT,
+    val visualizerCustom: Long = 0xFF6CC8FF,
+    val visualizerGradientStart: Long = 0xFF6CC8FF,
+    val visualizerGradientEnd: Long = 0xFFFF7EB6,
+    val visualizerScaling: VisualizerScaling = VisualizerScaling.AUTO,
+    /** Manual scaling: the level at the top of the display, in dB below a full-scale sine. */
+    val visualizerTopDb: Double = -12.0,
+    /** Manual scaling: how many dB the display spans below its top. */
+    val visualizerRangeDb: Double = 66.0,
+    val visualizerWeighting: VisualizerWeighting = VisualizerWeighting.FLAT,
+    val visualizerPhon: Int = 60,
+    /** With a weighting chosen: also draw the unweighted spectrum, faintly, to compare. */
+    val visualizerShowRaw: Boolean = false,
+    /** With a weighting chosen: draw the weighted spectrum. */
+    val visualizerShowWeighted: Boolean = true,
+    /** Lift the display 3 dB per octave, the way music's energy falls, so it moves across its width. */
+    val visualizerTilt: Boolean = true,
+    val backgroundMode: BackgroundMode = BackgroundMode.ALBUM,
+    val backgroundGradient: GradientSpec = GradientSpec.DEFAULT,
+    val backgroundPresets: List<NamedGradient> = emptyList(),
+    val themeMode: ThemeMode = ThemeMode.SYSTEM,
+    /** Blur what is behind floating glass, where the device can (Android 12 and later). */
+    val backdropBlur: Boolean = true,
+) {
+    fun filterOverrides(): FilterOverrides = FilterOverrides(gainDb = filterGainDb, q = filterQ)
+
+    companion object {
+        const val DEFAULT_EXCERPT_SECONDS = 8
+
+        /** Spectrum resolutions on offer: a sixth, twelfth, twenty-fourth and forty-eighth of an octave per point. */
+        val VISUALIZER_POINTS = listOf(60, 120, 240, 480)
+        val PHON_LEVELS = listOf(40, 60, 80)
+        val TOP_DB_RANGE = -60.0..0.0
+        val RANGE_DB_RANGE = 24.0..120.0
+        const val DEFAULT_VISUALIZER_POINTS = 240
+        val EXCERPT_RANGE = 4..15
+
+        /** 0.5 dB steps. The floor is audible on noise; the ceiling is where the ladder starts. */
+        const val GAIN_MIN_DB = 1.0
+        const val GAIN_MAX_DB = 12.0
+        const val GAIN_STEP_DB = 0.5
+
+        /** What the switch starts from when turned on: clearly audible without being harsh. */
+        const val DEFAULT_GAIN_DB = 6.0
+
+        /**
+         * Q is offered as a fixed list rather than a continuous slider, because what matters is its
+         * ratio - the difference between Q 1 and 2 is as large as between 16 and 32 - and a linear
+         * slider would spend almost all its travel on the narrow end.
+         */
+        val Q_VALUES = listOf(0.7, 1.0, 1.4, 2.0, 2.9, 4.0, 6.0, 8.0, 12.0, 16.0, 24.0, 32.0, 40.0)
+        const val DEFAULT_Q = 4.0
+
+        /** Bandwidth in octaves between the half-gain points of a peaking filter with this Q. */
+        fun octavesForQ(q: Double): Double = 2.0 / ln(2.0) * asinh(1.0 / (2.0 * q))
+    }
+}
+
+class SettingsRepository(
+    private val store: DataStore<Preferences>,
+    private val scope: CoroutineScope,
+) {
+    val settings: StateFlow<TrainerSettings> =
+        store.data.map { parse(it) }.stateIn(scope, SharingStarted.Eagerly, TrainerSettings())
+
+    /** The settings as stored, rather than the default the flow starts from before it has read. */
+    suspend fun current(): TrainerSettings = store.data.map { parse(it) }.first()
+
+    fun setLoudnessMatched(on: Boolean) = update { it[LOUDNESS_MATCHED] = on }
+
+    fun setExcerptSeconds(seconds: Int) = update {
+        it[EXCERPT_SECONDS] = seconds.coerceIn(TrainerSettings.EXCERPT_RANGE)
+    }
+
+    /** @param db null to hand the gain back to the ladder */
+    fun setFilterGain(db: Double?) = update { prefs ->
+        if (db == null) {
+            prefs.remove(FILTER_GAIN_DB)
+        } else {
+            prefs[FILTER_GAIN_DB] = db.coerceIn(TrainerSettings.GAIN_MIN_DB, TrainerSettings.GAIN_MAX_DB)
+        }
+    }
+
+    /** @param q null to hand the Q back to the ladder */
+    fun setFilterQ(q: Double?) = update { prefs ->
+        if (q == null) {
+            prefs.remove(FILTER_Q)
+        } else {
+            prefs[FILTER_Q] = q
+        }
+    }
+
+    fun setActiveEarphone(id: String?) = update { prefs ->
+        if (id == null) {
+            prefs.remove(ACTIVE_EARPHONE)
+        } else {
+            prefs[ACTIVE_EARPHONE] = id
+        }
+    }
+
+    fun setHubCards(on: Boolean) = update { it[HUB_CARDS] = on }
+
+    fun setVisualizerPoints(points: Int) = update { it[VISUALIZER_POINTS] = points }
+
+    fun setArtVisualizer(on: Boolean) = update { it[ART_VISUALIZER] = on }
+
+    fun setVisualizerColor(color: VisualizerColor) = update { it[VISUALIZER_COLOR] = color.name }
+
+    fun setVisualizerCustom(argb: Long) = update {
+        it[VISUALIZER_COLOR] = VisualizerColor.CUSTOM.name
+        it[VISUALIZER_CUSTOM] = argb
+    }
+
+    fun setVisualizerGradient(start: Long, end: Long) = update {
+        it[VISUALIZER_COLOR] = VisualizerColor.GRADIENT.name
+        it[VISUALIZER_GRADIENT_START] = start
+        it[VISUALIZER_GRADIENT_END] = end
+    }
+
+    /** Back to the default colour; the picked custom and gradient colours are kept for next time. */
+    fun resetVisualizerColor() = update { it[VISUALIZER_COLOR] = VisualizerColor.DEFAULT.name }
+
+    fun setVisualizerScaling(scaling: VisualizerScaling) = update { it[VISUALIZER_SCALING] = scaling.name }
+
+    fun setVisualizerWindow(topDb: Double, rangeDb: Double) = update {
+        it[VISUALIZER_TOP] = topDb.coerceIn(TrainerSettings.TOP_DB_RANGE)
+        it[VISUALIZER_RANGE] = rangeDb.coerceIn(TrainerSettings.RANGE_DB_RANGE)
+    }
+
+    fun setVisualizerWeighting(weighting: VisualizerWeighting) = update { it[VISUALIZER_WEIGHTING] = weighting.name }
+
+    fun setVisualizerPhon(phon: Int) = update { it[VISUALIZER_PHON] = phon }
+
+    fun setVisualizerShowRaw(on: Boolean) = update { it[VISUALIZER_SHOW_RAW] = on }
+
+    fun setVisualizerShowWeighted(on: Boolean) = update { it[VISUALIZER_SHOW_WEIGHTED] = on }
+
+    fun setVisualizerTilt(on: Boolean) = update { it[VISUALIZER_TILT] = on }
+
+    fun setBackgroundMode(mode: BackgroundMode) = update { it[BACKGROUND_MODE] = mode.name }
+
+    fun setBackgroundGradient(gradient: GradientSpec) = update { it[BACKGROUND_GRADIENT] = gradient.toJson().toString() }
+
+    fun setBackgroundPresets(presets: List<NamedGradient>) = update { it[BACKGROUND_PRESETS] = AppearanceCodec.presetsToJson(presets) }
+
+    fun setThemeMode(mode: ThemeMode) = update { it[THEME_MODE] = mode.name }
+
+    fun setBackdropBlur(on: Boolean) = update { it[BACKDROP_BLUR] = on }
+
+    fun setPracticeRange(range: FrequencyRange?) = update { prefs ->
+        if (range == null) {
+            prefs.remove(RANGE_LOW)
+            prefs.remove(RANGE_HIGH)
+        } else {
+            prefs[RANGE_LOW] = range.lowHz
+            prefs[RANGE_HIGH] = range.highHz
+        }
+    }
+
+    fun setSource(choice: SourceChoice) = update { prefs ->
+        when (choice) {
+            SourceChoice.PinkNoise -> {
+                prefs[SOURCE_KIND] = KIND_PINK
+                prefs.remove(SOURCE_URI)
+                prefs.remove(SOURCE_NAME)
+            }
+            is SourceChoice.File -> {
+                prefs[SOURCE_KIND] = KIND_FILE
+                prefs[SOURCE_URI] = choice.uri
+                prefs[SOURCE_NAME] = choice.name
+            }
+        }
+    }
+
+    // A plain function value is not accepted where DataStore wants a suspend transform, so the
+    // block is called from inside a lambda literal rather than passed straight through.
+    private fun update(block: (MutablePreferences) -> Unit) {
+        scope.launch { store.edit { prefs -> block(prefs) } }
+    }
+
+    private fun rangeOf(low: Double?, high: Double?): FrequencyRange? =
+        if (low != null && high != null && high > low && low > 0) FrequencyRange(low, high) else null
+
+    private fun parse(prefs: Preferences): TrainerSettings {
+        val uri = prefs[SOURCE_URI]
+        val source = if (prefs[SOURCE_KIND] == KIND_FILE && uri != null) {
+            SourceChoice.File(uri, prefs[SOURCE_NAME] ?: "선택한 음원")
+        } else {
+            SourceChoice.PinkNoise
+        }
+        return TrainerSettings(
+            loudnessMatched = prefs[LOUDNESS_MATCHED] ?: true,
+            excerptSeconds = prefs[EXCERPT_SECONDS] ?: TrainerSettings.DEFAULT_EXCERPT_SECONDS,
+            source = source,
+            filterGainDb = prefs[FILTER_GAIN_DB],
+            filterQ = prefs[FILTER_Q],
+            activeEarphoneId = prefs[ACTIVE_EARPHONE],
+            practiceRange = rangeOf(prefs[RANGE_LOW], prefs[RANGE_HIGH]),
+            hubCards = prefs[HUB_CARDS] ?: false,
+            visualizerPoints = prefs[VISUALIZER_POINTS]?.takeIf { it in TrainerSettings.VISUALIZER_POINTS }
+                ?: TrainerSettings.DEFAULT_VISUALIZER_POINTS,
+            artVisualizer = prefs[ART_VISUALIZER] ?: true,
+            visualizerColor = prefs[VISUALIZER_COLOR]?.let { name -> VisualizerColor.entries.firstOrNull { it.name == name } }
+                ?: VisualizerColor.DEFAULT,
+            visualizerCustom = prefs[VISUALIZER_CUSTOM] ?: 0xFF6CC8FF,
+            visualizerGradientStart = prefs[VISUALIZER_GRADIENT_START] ?: 0xFF6CC8FF,
+            visualizerGradientEnd = prefs[VISUALIZER_GRADIENT_END] ?: 0xFFFF7EB6,
+            visualizerScaling = prefs[VISUALIZER_SCALING]?.let { name -> VisualizerScaling.entries.firstOrNull { it.name == name } }
+                ?: VisualizerScaling.AUTO,
+            visualizerTopDb = (prefs[VISUALIZER_TOP] ?: -12.0).coerceIn(TrainerSettings.TOP_DB_RANGE),
+            visualizerRangeDb = (prefs[VISUALIZER_RANGE] ?: 66.0).coerceIn(TrainerSettings.RANGE_DB_RANGE),
+            visualizerWeighting = prefs[VISUALIZER_WEIGHTING]?.let { name -> VisualizerWeighting.entries.firstOrNull { it.name == name } }
+                ?: VisualizerWeighting.FLAT,
+            visualizerPhon = prefs[VISUALIZER_PHON]?.takeIf { it in TrainerSettings.PHON_LEVELS } ?: 60,
+            visualizerShowRaw = prefs[VISUALIZER_SHOW_RAW] ?: false,
+            visualizerShowWeighted = prefs[VISUALIZER_SHOW_WEIGHTED] ?: true,
+            visualizerTilt = prefs[VISUALIZER_TILT] ?: true,
+            backgroundMode = prefs[BACKGROUND_MODE]?.let { name -> BackgroundMode.entries.firstOrNull { it.name == name } }
+                ?: BackgroundMode.ALBUM,
+            backgroundGradient = AppearanceCodec.gradientFromJson(prefs[BACKGROUND_GRADIENT]),
+            backgroundPresets = AppearanceCodec.presetsFromJson(prefs[BACKGROUND_PRESETS]),
+            themeMode = prefs[THEME_MODE]?.let { name -> ThemeMode.entries.firstOrNull { it.name == name } } ?: ThemeMode.SYSTEM,
+            backdropBlur = prefs[BACKDROP_BLUR] ?: true,
+        )
+    }
+
+    private companion object {
+        val LOUDNESS_MATCHED = booleanPreferencesKey("settings_loudness_matched")
+        val EXCERPT_SECONDS = intPreferencesKey("settings_excerpt_seconds")
+        val SOURCE_KIND = stringPreferencesKey("settings_source_kind")
+        val SOURCE_URI = stringPreferencesKey("settings_source_uri")
+        val SOURCE_NAME = stringPreferencesKey("settings_source_name")
+        val FILTER_GAIN_DB = doublePreferencesKey("settings_filter_gain_db")
+        val FILTER_Q = doublePreferencesKey("settings_filter_q")
+        val ACTIVE_EARPHONE = stringPreferencesKey("settings_active_earphone")
+        val HUB_CARDS = booleanPreferencesKey("settings_hub_cards")
+        val VISUALIZER_POINTS = intPreferencesKey("settings_visualizer_points")
+        val ART_VISUALIZER = booleanPreferencesKey("settings_art_visualizer")
+        val VISUALIZER_COLOR = stringPreferencesKey("settings_visualizer_color")
+        val VISUALIZER_CUSTOM = longPreferencesKey("settings_visualizer_custom")
+        val VISUALIZER_GRADIENT_START = longPreferencesKey("settings_visualizer_gradient_start")
+        val VISUALIZER_GRADIENT_END = longPreferencesKey("settings_visualizer_gradient_end")
+        val VISUALIZER_SCALING = stringPreferencesKey("settings_visualizer_scaling")
+        val VISUALIZER_TOP = doublePreferencesKey("settings_visualizer_top")
+        val VISUALIZER_RANGE = doublePreferencesKey("settings_visualizer_range")
+        val VISUALIZER_WEIGHTING = stringPreferencesKey("settings_visualizer_weighting")
+        val VISUALIZER_PHON = intPreferencesKey("settings_visualizer_phon")
+        val VISUALIZER_SHOW_RAW = booleanPreferencesKey("settings_visualizer_show_raw")
+        val VISUALIZER_SHOW_WEIGHTED = booleanPreferencesKey("settings_visualizer_show_weighted")
+        val VISUALIZER_TILT = booleanPreferencesKey("settings_visualizer_tilt")
+        val BACKGROUND_MODE = stringPreferencesKey("settings_background_mode")
+        val BACKGROUND_GRADIENT = stringPreferencesKey("settings_background_gradient")
+        val BACKGROUND_PRESETS = stringPreferencesKey("settings_background_presets")
+        val THEME_MODE = stringPreferencesKey("settings_theme_mode")
+        val BACKDROP_BLUR = booleanPreferencesKey("settings_backdrop_blur")
+        val RANGE_LOW = doublePreferencesKey("settings_range_low")
+        val RANGE_HIGH = doublePreferencesKey("settings_range_high")
+        const val KIND_PINK = "pink"
+        const val KIND_FILE = "file"
+    }
+}
