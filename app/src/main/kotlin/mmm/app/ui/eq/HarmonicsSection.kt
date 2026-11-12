@@ -160,6 +160,7 @@ internal fun HarmonicsSection(state: PlaybackEq, update: ((PlaybackEq) -> Playba
             }
         }
         val t = p.tail
+        val top = p.maxOrder.coerceIn(HarmonicSettings.MIN_ORDER, HarmonicSettings.MAX_ORDER)
         val setTail = { change: (TailParams) -> TailParams -> edit { it.copy(tails = it.tails + (it.algorithm to change(it.tail))) } }
         LabelledSlider(
             label = "Intensity",
