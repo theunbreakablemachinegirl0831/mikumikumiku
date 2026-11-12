@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.LinearProgressIndicator
@@ -289,6 +290,7 @@ fun GlassTextField(
     placeholder: @Composable (() -> Unit)? = null,
     singleLine: Boolean = false,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
+    keyboardActions: KeyboardActions = KeyboardActions.Default,
     shape: Shape = if (singleLine) GlassShapes.pill else GlassShapes.card,
 ) {
     val colors = GlassTheme.colors
@@ -302,6 +304,7 @@ fun GlassTextField(
         placeholder = placeholder,
         singleLine = singleLine,
         keyboardOptions = keyboardOptions,
+        keyboardActions = keyboardActions,
         shape = shape,
         colors = OutlinedTextFieldDefaults.colors(
             focusedTextColor = colors.ink,

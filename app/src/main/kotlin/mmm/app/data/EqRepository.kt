@@ -20,8 +20,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import mmm.app.audiometry.AudiogramStore
-import mmm.dsp.artifacts.TubeBand
-import mmm.dsp.artifacts.TubeSettings
+import mmm.dsp.harmonics.HarmonicDrive
+import mmm.dsp.harmonics.HarmonicSettings
 import mmm.eq.EarphoneCalibration
 import mmm.eq.EqFilter
 import mmm.eq.EqFilterType
@@ -85,7 +85,8 @@ data class PlaybackEq(
     /** Follow the rules in detail up to 20 kHz instead of 10 kHz. */
     val autoFullRange: Boolean = false,
     val tubeEnabled: Boolean = false,
-    val tube: List<TubeBand> = TubeSettings.DEFAULT_BANDS,
+    /** The harmonic stage: profile, preset, amount, the NOS roll-off and band trims. */
+    val harmonics: HarmonicSettings = HarmonicSettings(),
     /** Compensate for the listener's own hearing, from the last hearing test. */
     val hearingEnabled: Boolean = false,
     val hearingRule: HearingRule = HearingRule.NAL_R,
@@ -160,6 +161,7 @@ class EqRepository(
 ) {
     private val file = File(context.filesDir, "playback_eq.json")
     private val autoCache = File(context.filesDir, "playback_auto_eq.txt")
+    private val hearingCache = File(context.filesDir, "playback_hearing_eq.txt")
 
     private val _state = MutableStateFlow(load())
     val state: StateFlow<PlaybackEq> = _state.asStateFlow()
@@ -170,7 +172,11 @@ class EqRepository(
     )
     val auto: StateFlow<AutoFitState> = _auto.asStateFlow()
 
-    private val _hearing = MutableStateFlow(HearingFitState())
+    // Kept on disk like the automatic layer: the profile the player starts with has to be the one
+    // it will keep, or the first moments play at the wrong level until the refit lands.
+    private val _hearing = MutableStateFlow(
+        HearingFitState(filters = runCatching { EqProfile.parseApo(hearingCache.readText()).filters }.getOrDefault(emptyList()))
+    )
     val hearing: StateFlow<HearingFitState> = _hearing.asStateFlow()
 
     /** The EQ to play, or null to play untouched. */
@@ -182,13 +188,19 @@ class EqRepository(
         ) { state, autoFilters, hearingFilters -> compose(state, autoFilters, hearingFilters) }
             .conflate()
             .flowOn(Dispatchers.Default)
-            .stateIn(scope, SharingStarted.Eagerly, compose(_state.value, _auto.value.filters, emptyList()))
+            .stateIn(scope, SharingStarted.Eagerly, compose(_state.value, _auto.value.filters, _hearing.value.filters))
 
-    /** The valve harmonics to add after the EQ, or null for none. */
-    val tube: StateFlow<TubeSettings?> =
-        _state.map { s -> if (s.enabled && s.tubeEnabled) TubeSettings(s.tube).takeIf { it.active } else null }
+    /** The harmonic gains to play; silent when the stage is off. */
+    val harmonics: StateFlow<HarmonicDrive> =
+        _state.map { s -> if (s.enabled && s.tubeEnabled) s.harmonics.drive() else HarmonicDrive.SILENT }
+            .distinctUntilChanged { a, b -> a.gains.contentEquals(b.gains) && a.bandGains.contentEquals(b.bandGains) }
+            .stateIn(scope, SharingStarted.Eagerly, harmonicsOf(_state.value))
+
+    /** Whether the NOS treble roll-off is on. */
+    val nos: StateFlow<Boolean> =
+        _state.map { it.enabled && it.tubeEnabled && it.harmonics.nos }
             .distinctUntilChanged()
-            .stateIn(scope, SharingStarted.Eagerly, null)
+            .stateIn(scope, SharingStarted.Eagerly, _state.value.let { it.enabled && it.tubeEnabled && it.harmonics.nos })
 
     init {
         scope.launch(Dispatchers.IO) {
@@ -219,7 +231,11 @@ class EqRepository(
             ) { result, id, list, rule -> Triple(result, list.firstOrNull { it.id == id }, rule) }
                 .collectLatest { (result, earphone, rule) ->
                     delay(REFIT_DELAY_MS)
-                    _hearing.value = fitHearing(result, earphone, rule.first, rule.second, rule.third)
+                    val fitted = fitHearing(result, earphone, rule.first, rule.second, rule.third)
+                    _hearing.value = fitted
+                    withContext(Dispatchers.IO) {
+                        runCatching { hearingCache.writeText(EqProfile(fitted.filters, 0.0).toApoText()) }
+                    }
                 }
         }
     }
@@ -238,6 +254,9 @@ class EqRepository(
             if (state.peqEnabled) state.peq.filter { it.enabled }.map(PeqBand::toFilter) else emptyList(),
             if (state.geqEnabled) state.geq.filters(state.geqGains) else emptyList(),
         )
+
+    private fun harmonicsOf(s: PlaybackEq): HarmonicDrive =
+        if (s.enabled && s.tubeEnabled) s.harmonics.drive() else HarmonicDrive.SILENT
 
     private fun compose(state: PlaybackEq, autoFilters: List<EqFilter>, hearingFilters: List<EqFilter>): EqProfile? {
         if (!state.enabled) return null
@@ -385,16 +404,8 @@ class EqRepository(
             }
         })
         put("tubeEnabled", s.tubeEnabled)
-        put("tube", JSONArray().apply {
-            s.tube.forEach { band ->
-                put(JSONObject().apply {
-                    put("from", band.fromHz)
-                    put("to", band.toHz)
-                    put("h2", band.secondDb)
-                    put("h3", band.thirdDb)
-                })
-            }
-        })
+        put("harmonics", HarmonicCodec.write(s.harmonics))
+        put("version", FORMAT_VERSION)
         put("hearingEnabled", s.hearingEnabled)
         put("hearingRule", s.hearingRule.name)
         put("hearingStrength", s.hearingStrength)
@@ -433,10 +444,10 @@ class EqRepository(
                 toHz = r.optDouble("to", 20000.0).coerceIn(from * 1.1, 20000.0),
             )
         }
-        val tube = list("tube") { a, i ->
-            val b = a.getJSONObject(i)
-            TubeBand(b.getDouble("from"), b.getDouble("to"), b.optDouble("h2", TubeBand.OFF_DB), b.optDouble("h3", TubeBand.OFF_DB))
-        }?.takeIf { it.size == TubeSettings.DEFAULT_BANDS.size }
+        // Version 1 kept H2 and H3 per band; version 2 keeps a whole harmonic profile.
+        val harmonics = o.optJSONObject("harmonics")?.let { runCatching { HarmonicCodec.read(it) }.getOrNull() }
+            ?: o.optJSONArray("tube")?.let { runCatching { HarmonicCodec.migrateBands(it) }.getOrNull() }
+            ?: defaults.harmonics
 
         return PlaybackEq(
             enabled = o.optBoolean("enabled", defaults.enabled),
@@ -450,7 +461,7 @@ class EqRepository(
             autoRules = rules ?: emptyList(),
             autoFullRange = o.optBoolean("autoFullRange", false),
             tubeEnabled = o.optBoolean("tubeEnabled", false),
-            tube = tube ?: defaults.tube,
+            harmonics = harmonics,
             hearingEnabled = o.optBoolean("hearingEnabled", false),
             hearingRule = runCatching { HearingRule.valueOf(o.getString("hearingRule")) }.getOrDefault(HearingRule.NAL_R),
             hearingStrength = o.optDouble("hearingStrength", 1.0).coerceIn(0.0, 1.5),
@@ -466,6 +477,7 @@ class EqRepository(
         const val SAVE_DELAY_MS = 400L
         const val REFIT_DELAY_MS = 150L
         const val SMOOTHING = 12
+        const val FORMAT_VERSION = 2
 
         /** A hearing loss is a broad shape; a few filters follow it, and it may ask for more than an earphone does. */
         val HEARING_FIT = PeqFitSettings(maxFilters = 6, maxBoostDb = 12.0, maxTotalBoostDb = 15.0)

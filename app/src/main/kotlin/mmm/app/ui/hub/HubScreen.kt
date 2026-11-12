@@ -1,5 +1,6 @@
 package mmm.app.ui.hub
 
+import mmm.app.ui.components.rememberTabScrollState
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -143,7 +144,7 @@ fun HubScreen(
     )
 
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
+        Modifier.fillMaxSize().verticalScroll(rememberTabScrollState()).padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {

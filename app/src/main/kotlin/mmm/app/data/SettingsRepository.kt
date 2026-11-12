@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.doublePreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.SharingStarted
@@ -35,6 +36,10 @@ enum class VisualizerColor(val label: String, val argb: Long?) {
     ORANGE("주황", 0xFFFF9F5A),
     PINK("분홍", 0xFFFF7EB6),
     VIOLET("보라", 0xFFB48CFF),
+    /** One colour the listener picked. */
+    CUSTOM("사용자 지정", null),
+    /** Two colours the listener picked, from the bass end to the treble end. */
+    GRADIENT("그라데이션", null),
 }
 
 /** Where the audio for the exercises comes from. */
@@ -74,6 +79,25 @@ data class TrainerSettings(
     /** Draw the spectrum over the album art. */
     val artVisualizer: Boolean = true,
     val visualizerColor: VisualizerColor = VisualizerColor.DEFAULT,
+    val visualizerCustom: Long = 0xFF6CC8FF,
+    val visualizerGradientStart: Long = 0xFF6CC8FF,
+    val visualizerGradientEnd: Long = 0xFFFF7EB6,
+    val visualizerScaling: VisualizerScaling = VisualizerScaling.AUTO,
+    /** Manual scaling: the level at the top of the display, in dB below a full-scale sine. */
+    val visualizerTopDb: Double = -12.0,
+    /** Manual scaling: how many dB the display spans below its top. */
+    val visualizerRangeDb: Double = 66.0,
+    val visualizerWeighting: VisualizerWeighting = VisualizerWeighting.FLAT,
+    val visualizerPhon: Int = 60,
+    /** With a weighting chosen: also draw the unweighted spectrum, faintly, to compare. */
+    val visualizerShowRaw: Boolean = false,
+    /** With a weighting chosen: draw the weighted spectrum. */
+    val visualizerShowWeighted: Boolean = true,
+    /** Lift the display 3 dB per octave, the way music's energy falls, so it moves across its width. */
+    val visualizerTilt: Boolean = true,
+    val backgroundMode: BackgroundMode = BackgroundMode.ALBUM,
+    val backgroundGradient: GradientSpec = GradientSpec.DEFAULT,
+    val backgroundPresets: List<NamedGradient> = emptyList(),
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     /** Blur what is behind floating glass, where the device can (Android 12 and later). */
     val backdropBlur: Boolean = true,
@@ -85,6 +109,9 @@ data class TrainerSettings(
 
         /** Spectrum resolutions on offer: a sixth, twelfth, twenty-fourth and forty-eighth of an octave per point. */
         val VISUALIZER_POINTS = listOf(60, 120, 240, 480)
+        val PHON_LEVELS = listOf(40, 60, 80)
+        val TOP_DB_RANGE = -60.0..0.0
+        val RANGE_DB_RANGE = 24.0..120.0
         const val DEFAULT_VISUALIZER_POINTS = 240
         val EXCERPT_RANGE = 4..15
 
@@ -159,6 +186,43 @@ class SettingsRepository(
 
     fun setVisualizerColor(color: VisualizerColor) = update { it[VISUALIZER_COLOR] = color.name }
 
+    fun setVisualizerCustom(argb: Long) = update {
+        it[VISUALIZER_COLOR] = VisualizerColor.CUSTOM.name
+        it[VISUALIZER_CUSTOM] = argb
+    }
+
+    fun setVisualizerGradient(start: Long, end: Long) = update {
+        it[VISUALIZER_COLOR] = VisualizerColor.GRADIENT.name
+        it[VISUALIZER_GRADIENT_START] = start
+        it[VISUALIZER_GRADIENT_END] = end
+    }
+
+    /** Back to the default colour; the picked custom and gradient colours are kept for next time. */
+    fun resetVisualizerColor() = update { it[VISUALIZER_COLOR] = VisualizerColor.DEFAULT.name }
+
+    fun setVisualizerScaling(scaling: VisualizerScaling) = update { it[VISUALIZER_SCALING] = scaling.name }
+
+    fun setVisualizerWindow(topDb: Double, rangeDb: Double) = update {
+        it[VISUALIZER_TOP] = topDb.coerceIn(TrainerSettings.TOP_DB_RANGE)
+        it[VISUALIZER_RANGE] = rangeDb.coerceIn(TrainerSettings.RANGE_DB_RANGE)
+    }
+
+    fun setVisualizerWeighting(weighting: VisualizerWeighting) = update { it[VISUALIZER_WEIGHTING] = weighting.name }
+
+    fun setVisualizerPhon(phon: Int) = update { it[VISUALIZER_PHON] = phon }
+
+    fun setVisualizerShowRaw(on: Boolean) = update { it[VISUALIZER_SHOW_RAW] = on }
+
+    fun setVisualizerShowWeighted(on: Boolean) = update { it[VISUALIZER_SHOW_WEIGHTED] = on }
+
+    fun setVisualizerTilt(on: Boolean) = update { it[VISUALIZER_TILT] = on }
+
+    fun setBackgroundMode(mode: BackgroundMode) = update { it[BACKGROUND_MODE] = mode.name }
+
+    fun setBackgroundGradient(gradient: GradientSpec) = update { it[BACKGROUND_GRADIENT] = gradient.toJson().toString() }
+
+    fun setBackgroundPresets(presets: List<NamedGradient>) = update { it[BACKGROUND_PRESETS] = AppearanceCodec.presetsToJson(presets) }
+
     fun setThemeMode(mode: ThemeMode) = update { it[THEME_MODE] = mode.name }
 
     fun setBackdropBlur(on: Boolean) = update { it[BACKDROP_BLUR] = on }
@@ -218,6 +282,23 @@ class SettingsRepository(
             artVisualizer = prefs[ART_VISUALIZER] ?: true,
             visualizerColor = prefs[VISUALIZER_COLOR]?.let { name -> VisualizerColor.entries.firstOrNull { it.name == name } }
                 ?: VisualizerColor.DEFAULT,
+            visualizerCustom = prefs[VISUALIZER_CUSTOM] ?: 0xFF6CC8FF,
+            visualizerGradientStart = prefs[VISUALIZER_GRADIENT_START] ?: 0xFF6CC8FF,
+            visualizerGradientEnd = prefs[VISUALIZER_GRADIENT_END] ?: 0xFFFF7EB6,
+            visualizerScaling = prefs[VISUALIZER_SCALING]?.let { name -> VisualizerScaling.entries.firstOrNull { it.name == name } }
+                ?: VisualizerScaling.AUTO,
+            visualizerTopDb = (prefs[VISUALIZER_TOP] ?: -12.0).coerceIn(TrainerSettings.TOP_DB_RANGE),
+            visualizerRangeDb = (prefs[VISUALIZER_RANGE] ?: 66.0).coerceIn(TrainerSettings.RANGE_DB_RANGE),
+            visualizerWeighting = prefs[VISUALIZER_WEIGHTING]?.let { name -> VisualizerWeighting.entries.firstOrNull { it.name == name } }
+                ?: VisualizerWeighting.FLAT,
+            visualizerPhon = prefs[VISUALIZER_PHON]?.takeIf { it in TrainerSettings.PHON_LEVELS } ?: 60,
+            visualizerShowRaw = prefs[VISUALIZER_SHOW_RAW] ?: false,
+            visualizerShowWeighted = prefs[VISUALIZER_SHOW_WEIGHTED] ?: true,
+            visualizerTilt = prefs[VISUALIZER_TILT] ?: true,
+            backgroundMode = prefs[BACKGROUND_MODE]?.let { name -> BackgroundMode.entries.firstOrNull { it.name == name } }
+                ?: BackgroundMode.ALBUM,
+            backgroundGradient = AppearanceCodec.gradientFromJson(prefs[BACKGROUND_GRADIENT]),
+            backgroundPresets = AppearanceCodec.presetsFromJson(prefs[BACKGROUND_PRESETS]),
             themeMode = prefs[THEME_MODE]?.let { name -> ThemeMode.entries.firstOrNull { it.name == name } } ?: ThemeMode.SYSTEM,
             backdropBlur = prefs[BACKDROP_BLUR] ?: true,
         )
@@ -236,6 +317,20 @@ class SettingsRepository(
         val VISUALIZER_POINTS = intPreferencesKey("settings_visualizer_points")
         val ART_VISUALIZER = booleanPreferencesKey("settings_art_visualizer")
         val VISUALIZER_COLOR = stringPreferencesKey("settings_visualizer_color")
+        val VISUALIZER_CUSTOM = longPreferencesKey("settings_visualizer_custom")
+        val VISUALIZER_GRADIENT_START = longPreferencesKey("settings_visualizer_gradient_start")
+        val VISUALIZER_GRADIENT_END = longPreferencesKey("settings_visualizer_gradient_end")
+        val VISUALIZER_SCALING = stringPreferencesKey("settings_visualizer_scaling")
+        val VISUALIZER_TOP = doublePreferencesKey("settings_visualizer_top")
+        val VISUALIZER_RANGE = doublePreferencesKey("settings_visualizer_range")
+        val VISUALIZER_WEIGHTING = stringPreferencesKey("settings_visualizer_weighting")
+        val VISUALIZER_PHON = intPreferencesKey("settings_visualizer_phon")
+        val VISUALIZER_SHOW_RAW = booleanPreferencesKey("settings_visualizer_show_raw")
+        val VISUALIZER_SHOW_WEIGHTED = booleanPreferencesKey("settings_visualizer_show_weighted")
+        val VISUALIZER_TILT = booleanPreferencesKey("settings_visualizer_tilt")
+        val BACKGROUND_MODE = stringPreferencesKey("settings_background_mode")
+        val BACKGROUND_GRADIENT = stringPreferencesKey("settings_background_gradient")
+        val BACKGROUND_PRESETS = stringPreferencesKey("settings_background_presets")
         val THEME_MODE = stringPreferencesKey("settings_theme_mode")
         val BACKDROP_BLUR = booleanPreferencesKey("settings_backdrop_blur")
         val RANGE_LOW = doublePreferencesKey("settings_range_low")

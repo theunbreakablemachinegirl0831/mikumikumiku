@@ -1,5 +1,6 @@
 package mmm.app.ui.eq
 
+import mmm.app.ui.components.rememberTabScrollState
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
@@ -41,6 +42,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.material3.HorizontalDivider
+import mmm.app.ui.theme.GlassTheme
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
@@ -62,7 +65,9 @@ import mmm.app.ui.components.glass.glass
 import mmm.app.ui.visual.PlayerSpectrumSource
 import mmm.app.ui.visual.VisualizerSpectrumSource
 import mmm.app.ui.visual.rememberSpectrum
-import mmm.app.ui.visual.visualizerColor
+import mmm.app.ui.visual.SpectrumLayers
+import mmm.app.ui.visual.SpectrumOptions
+import mmm.app.ui.visual.visualizerPaint
 import mmm.eq.EqFilterType
 import mmm.eq.EqProfile
 import mmm.eq.EqStack
@@ -71,7 +76,7 @@ import kotlin.math.ln
 import kotlin.math.pow
 import kotlin.math.roundToInt
 
-private val TABS = listOf("GEQ", "PEQ", "AutoEQ", "음장")
+private val TABS = listOf("GEQ", "PEQ", "AutoEQ", "배음")
 private const val TAB_GEQ = 0
 private const val TAB_PEQ = 1
 private const val TAB_AUTO = 2
@@ -102,7 +107,7 @@ fun EqScreen(app: MmmApplication, onOpenEarphones: () -> Unit, onFindEarphone: (
     val spectrum = rememberSpectrum(
         source = if (external) VisualizerSpectrumSource else PlayerSpectrumSource,
         playing = now.isPlaying || external,
-        points = settings.visualizerPoints,
+        options = SpectrumOptions.of(settings),
     )
 
     val layers = remember(state, auto.filters, hearing.filters) { app.eq.layerFilters(state, auto.filters, hearing.filters) }
@@ -127,7 +132,7 @@ fun EqScreen(app: MmmApplication, onOpenEarphones: () -> Unit, onFindEarphone: (
     }
 
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
+        Modifier.fillMaxSize().verticalScroll(rememberTabScrollState()).padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -137,7 +142,7 @@ fun EqScreen(app: MmmApplication, onOpenEarphones: () -> Unit, onFindEarphone: (
                     when {
                         !state.enabled -> "꺼짐 - 원래 소리 그대로 재생한다"
                         profile == null -> "켜짐 - 걸린 필터가 없다"
-                        else -> "필터 ${total.size}개 · 프리앰프 ${db(profile?.preampDb ?: 0.0)} dB" +
+                        else -> "필터 ${total.size}개 · 프리앰프 ${db(profile?.preampDb ?: 0.0)}\u00A0dB" +
                             (if (state.hearingEnabled) " · 청력 보정 포함" else "") +
                             (if (state.systemEq) " · 다른 앱에도 적용" else "")
                     },
@@ -181,14 +186,29 @@ fun EqScreen(app: MmmApplication, onOpenEarphones: () -> Unit, onFindEarphone: (
                     )
                 }
             }
-            Switch(checked = state.enabled, onCheckedChange = { on -> app.eq.update { it.copy(enabled = on) } })
         }
 
         PillTabs(TABS, tab, { tab = it }, fill = true)
 
         Column(Modifier.fillMaxWidth().glass()) {
+            // The master switch heads the bubble it governs, above the switch for the tab's own layer.
             Row(
-                Modifier.fillMaxWidth().padding(start = 18.dp, end = 12.dp, top = 10.dp),
+                Modifier.fillMaxWidth().padding(start = 18.dp, end = 12.dp, top = 12.dp, bottom = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("재생 EQ", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        if (state.enabled) "켜짐 - 아래 켠 단계가 모두 적용된다" else "꺼짐 - 원래 소리 그대로",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = GlassTheme.colors.inkMuted,
+                    )
+                }
+                Switch(checked = state.enabled, onCheckedChange = { on -> app.eq.update { it.copy(enabled = on) } })
+            }
+            HorizontalDivider(Modifier.padding(horizontal = 18.dp), color = GlassTheme.colors.inkFaint.copy(alpha = 0.3f))
+            Row(
+                Modifier.fillMaxWidth().padding(start = 18.dp, end = 12.dp, top = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
@@ -196,9 +216,9 @@ fun EqScreen(app: MmmApplication, onOpenEarphones: () -> Unit, onFindEarphone: (
                         TAB_GEQ -> "그래픽 EQ 사용"
                         TAB_PEQ -> "파라메트릭 EQ 사용"
                         TAB_AUTO -> "자동 EQ 사용"
-                        else -> "진공관 배음 사용"
+                        else -> "배음 생성 사용"
                     },
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.bodyLarge,
                     modifier = Modifier.weight(1f),
                 )
                 Switch(
@@ -223,11 +243,8 @@ fun EqScreen(app: MmmApplication, onOpenEarphones: () -> Unit, onFindEarphone: (
             EqGraph(
                 total = total,
                 spectrum = spectrum,
-                spectrumColor = if (settings.visualizerColor == VisualizerColor.DEFAULT) {
-                    Color.Unspecified
-                } else {
-                    visualizerColor(settings.visualizerColor, onArtwork = false)
-                },
+                spectrumPaint = if (settings.visualizerColor == VisualizerColor.DEFAULT) null else visualizerPaint(settings, onArtwork = false),
+                spectrumLayers = SpectrumLayers.of(settings),
                 layer = editing,
                 active = state.enabled,
                 nodes = if (tab == TAB_PEQ) state.peq else emptyList(),
@@ -253,7 +270,7 @@ fun EqScreen(app: MmmApplication, onOpenEarphones: () -> Unit, onFindEarphone: (
                     TAB_GEQ -> GeqSection(state, app.eq::update)
                     TAB_PEQ -> PeqSection(state, band.coerceIn(0, (state.peq.size - 1).coerceAtLeast(0)), { band = it }, app.eq::update)
                     TAB_AUTO -> AutoEqSection(app, state, auto, onOpenEarphones, onFindEarphone)
-                    else -> TubeSection(state, app.eq::update)
+                    else -> HarmonicsSection(state, app.eq::update)
                 }
             }
         }
@@ -301,7 +318,7 @@ private fun PeqSection(state: PlaybackEq, selected: Int, onSelect: (Int) -> Unit
         )
         LabelledSlider(
             label = "게인",
-            value = "${signed(band.gainDb)} dB",
+            value = "${signed(band.gainDb)}\u00A0dB",
             position = band.gainDb.toFloat(),
             range = -PlaybackEq.GAIN_LIMIT_DB.toFloat()..PlaybackEq.GAIN_LIMIT_DB.toFloat(),
             onChange = { g -> update { it.withBand(selected) { b -> b.copy(gainDb = roundTenth(g.toDouble())) } } },
@@ -382,7 +399,7 @@ private fun PreampCard(
     Column(Modifier.fillMaxWidth().glass().padding(horizontal = 18.dp, vertical = 10.dp)) {
         LabelledSlider(
             label = "프리앰프",
-            value = "${db(state.preampDb)} dB",
+            value = "${db(state.preampDb)}\u00A0dB",
             position = state.preampDb.toFloat(),
             range = -15f..6f,
             onChange = { v -> update { it.copy(preampDb = (v * 2).roundToInt() / 2.0) } },
@@ -391,7 +408,7 @@ private fun PreampCard(
         Text(
             when {
                 !state.autoHeadroom -> "자동 프리앰프가 꺼져 있다. 부스트가 크면 소리가 찢어질 수 있다."
-                headroom > 0 -> "부스트만큼 자동으로 ${db(-headroom)} dB 더 내려서 찢어지지 않게 한다 → 실제 ${db(profile?.preampDb ?: state.preampDb)} dB"
+                headroom > 0 -> "부스트만큼 자동으로 ${db(-headroom)} dB 더 내려서 찢어지지 않게 한다 → 실제 ${db(profile?.preampDb ?: state.preampDb)}\u00A0dB"
                 else -> "지금 EQ에는 부스트가 없어 자동으로 내릴 것이 없다."
             },
             style = MaterialTheme.typography.bodySmall,
@@ -431,9 +448,9 @@ internal fun roundHz(frequency: Double): Double {
 internal fun hz(frequency: Double): String =
     if (frequency >= 1000) {
         val k = (frequency / 10).roundToInt() / 100.0
-        (if (k == kotlin.math.floor(k)) k.toInt().toString() else k.toString()) + " kHz"
+        (if (k == kotlin.math.floor(k)) k.toInt().toString() else k.toString()) + "\u00A0kHz"
     } else {
-        "${frequency.roundToInt()} Hz"
+        "${frequency.roundToInt()}\u00A0Hz"
     }
 
 internal fun db(value: Double): String = String.format(Locale.ROOT, "%.1f", value)

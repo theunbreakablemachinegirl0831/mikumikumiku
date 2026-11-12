@@ -1,5 +1,6 @@
 package mmm.app.ui.player
 
+import mmm.app.ui.components.rememberTabLazyListState
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
@@ -224,7 +225,7 @@ private fun Songs(app: MmmApplication, library: LibraryState, now: NowPlaying) {
             }
         }
     }
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = LocalPanelInset.current)) {
+    LazyColumn(Modifier.fillMaxSize(), state = rememberTabLazyListState(), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = LocalPanelInset.current)) {
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Count(if (library.loading) "음악 목록을 읽는 중" else "${songs.size}곡", Modifier.weight(1f))
@@ -252,7 +253,7 @@ private fun Songs(app: MmmApplication, library: LibraryState, now: NowPlaying) {
 
 @Composable
 private fun <T> Groups(count: String, entries: List<T>, key: (T) -> Any, row: @Composable (T) -> Unit) {
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = LocalPanelInset.current)) {
+    LazyColumn(Modifier.fillMaxSize(), state = rememberTabLazyListState(), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = LocalPanelInset.current)) {
         item { Count(count) }
         items(entries, key = key) { row(it) }
     }
@@ -270,7 +271,7 @@ private fun TrackList(
     playlist: String? = null,
     empty: String? = null,
 ) {
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = LocalPanelInset.current)) {
+    LazyColumn(Modifier.fillMaxSize(), state = rememberTabLazyListState(), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = LocalPanelInset.current)) {
         item {
             GlassTopBar(title = title, onBack = onBack, subtitle = subtitle) {
                 IconButton(
@@ -291,7 +292,7 @@ private fun TrackList(
 private fun Playlists(app: MmmApplication, library: LibraryState, onOpen: (String) -> Unit) {
     var name by remember { mutableStateOf("") }
     val usable = name.isNotBlank() && library.playlists.none { it.name == name.trim() }
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = LocalPanelInset.current)) {
+    LazyColumn(Modifier.fillMaxSize(), state = rememberTabLazyListState(), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = LocalPanelInset.current)) {
         item {
             Count("${library.playlists.size}개 재생목록")
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {

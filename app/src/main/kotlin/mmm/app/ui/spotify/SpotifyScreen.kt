@@ -1,11 +1,13 @@
 package mmm.app.ui.spotify
 
+import mmm.app.ui.components.rememberTabScrollState
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,11 +18,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.MoreHoriz
+import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.MusicNote
 import mmm.app.ui.components.glass.GlassMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -28,23 +32,22 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.core.graphics.drawable.toBitmap
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import kotlinx.coroutines.delay
 import mmm.app.MmmApplication
 import mmm.app.ui.theme.GlassTheme
 import mmm.app.sessioneq.SessionEqService
@@ -59,7 +62,9 @@ import mmm.app.ui.components.glass.LocalPanelInset
 import mmm.app.ui.components.glass.Switch
 import mmm.app.ui.components.glass.glass
 import mmm.app.ui.visual.VisualizerSpectrumSource
-import mmm.app.ui.visual.visualizerColor
+import mmm.app.data.TrainerSettings
+import mmm.app.ui.player.rememberPlaybackPosition
+import mmm.app.ui.visual.VisualizerSheet
 
 /**
  * Spotify, in the shape of the player: what it is playing, with the same artwork, spectrum and
@@ -78,6 +83,7 @@ fun SpotifyScreen(app: MmmApplication, onOpenEq: () -> Unit) {
     val status by SessionEqService.status.collectAsStateWithLifecycle()
     val settings by app.settings.settings.collectAsStateWithLifecycle()
     var menu by remember { mutableStateOf(false) }
+    var visualizer by remember { mutableStateOf(false) }
 
     // Coming back from the system settings is the moment access may have changed.
     LifecycleResumeEffect(Unit) {
@@ -110,14 +116,15 @@ fun SpotifyScreen(app: MmmApplication, onOpenEq: () -> Unit) {
     }
 
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp),
+        Modifier.fillMaxSize().verticalScroll(rememberTabScrollState()).padding(horizontal = 24.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(appName(external.packageName), style = MaterialTheme.typography.headlineMedium, modifier = Modifier.weight(1f))
+            Box(Modifier.weight(1f)) { AppIcon(external.packageName ?: ExternalPlayback.SPOTIFY) }
             Box {
-                IconButton(onClick = { menu = true }) { Icon(Icons.Rounded.MoreHoriz, contentDescription = "더 보기") }
+                IconButton(onClick = { menu = true }) { Icon(Icons.Rounded.MoreVert, contentDescription = "더 보기") }
                 GlassMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                    DropdownMenuItem(text = { Text("비주얼라이저 색 · 표시") }, onClick = { menu = false; visualizer = true })
                     DropdownMenuItem(text = { Text("Spotify 열기") }, onClick = { menu = false; openSpotify() })
                     DropdownMenuItem(text = { Text("재생 EQ 열기") }, onClick = { menu = false; onOpenEq() })
                     DropdownMenuItem(text = { Text("재생 정보 접근 설정") }, onClick = { menu = false; openAccess() })
@@ -129,9 +136,8 @@ fun SpotifyScreen(app: MmmApplication, onOpenEq: () -> Unit) {
             Playing(
                 app = app,
                 external = external,
-                points = settings.visualizerPoints,
+                settings = settings,
                 showSpectrum = settings.artVisualizer && status.sessions.any { it.error == null },
-                spectrumColor = visualizerColor(settings.visualizerColor, onArtwork = true),
             )
         } else {
             Column(Modifier.fillMaxWidth().glass().padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -155,17 +161,37 @@ fun SpotifyScreen(app: MmmApplication, onOpenEq: () -> Unit) {
         EqStatus(eq.enabled, eq.systemEq, status, setSystemEq)
         Spacer(Modifier.height(LocalPanelInset.current))
     }
+    if (visualizer) VisualizerSheet(app, onDismiss = { visualizer = false })
+}
+
+/**
+ * The tab's heading: the playing app's own launcher icon, as the system has it, in place of its
+ * name in large type. Nothing is bundled - an app that is not installed gets a generic icon -
+ * and the name is still there for screen readers.
+ */
+@Composable
+private fun AppIcon(packageName: String) {
+    val context = LocalContext.current
+    val icon = remember(packageName) {
+        runCatching { context.packageManager.getApplicationIcon(packageName).toBitmap(144, 144).asImageBitmap() }.getOrNull()
+    }
+    val name = appName(packageName)
+    if (icon != null) {
+        Image(
+            bitmap = icon,
+            contentDescription = name,
+            modifier = Modifier.size(40.dp).clip(RoundedCornerShape(10.dp)),
+        )
+    } else {
+        Icon(Icons.Rounded.MusicNote, contentDescription = name, modifier = Modifier.size(36.dp))
+    }
 }
 
 @Composable
-private fun Playing(app: MmmApplication, external: ExternalNowPlaying, points: Int, showSpectrum: Boolean, spectrumColor: Color) {
-    // The session reports its position only when it jumps; in between it is worked out from the clock.
-    var position by remember { mutableLongStateOf(external.positionNow()) }
-    LaunchedEffect(external.positionMs, external.positionAt, external.isPlaying) {
-        while (true) {
-            position = external.positionNow()
-            delay(500)
-        }
+private fun Playing(app: MmmApplication, external: ExternalNowPlaying, settings: TrainerSettings, showSpectrum: Boolean) {
+    // The session reports its position only when it jumps; in between it is worked out from its clock.
+    val position = rememberPlaybackPosition(running = external.isPlaying, anchor = external.positionMs to external.positionAt) {
+        external.positionNow()
     }
 
     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -174,28 +200,27 @@ private fun Playing(app: MmmApplication, external: ExternalNowPlaying, points: I
             bitmap = external.artwork,
             playing = external.isPlaying,
             source = VisualizerSpectrumSource,
-            points = points,
+            settings = settings,
             showSpectrum = showSpectrum,
-            spectrumColor = spectrumColor,
             modifier = Modifier.fillMaxWidth().aspectRatio(1f),
         )
     }
     Column {
         Text(
             external.title ?: "제목 없음",
-            style = MaterialTheme.typography.headlineSmall,
+            style = MaterialTheme.typography.titleLarge,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
         Text(
             listOfNotNull(external.artist, external.album?.takeIf { it.isNotBlank() }).joinToString(" · "),
-            style = MaterialTheme.typography.bodyLarge,
+            style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
     }
-    SeekBar(positionMs = position, durationMs = external.durationMs, badge = null, onSeek = app.external::seekTo)
+    SeekBar(position = { position.longValue }, durationMs = external.durationMs, badge = null, onSeek = app.external::seekTo)
     Transport(
         playing = external.isPlaying,
         onPrevious = app.external::previous,

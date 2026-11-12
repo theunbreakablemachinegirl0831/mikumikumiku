@@ -4,6 +4,7 @@ import mmm.dsp.AudioBuffer
 import mmm.dsp.AudioFormat
 import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.pow
 import kotlin.math.sin
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -62,6 +63,48 @@ class EqStackTest {
         processor.process(buffer)
         val peak = (frames / 2 until frames).maxOf { abs(buffer.data[0][it]) }
         assertEquals(0.1 * 0.501, peak.toDouble(), 0.003)
+    }
+}
+
+class EqProcessorStartTest {
+
+    private val rate = 48000
+
+    private fun blockPeak(buffer: AudioBuffer): Double = (0 until buffer.frames).maxOf { abs(buffer.data[0][it].toDouble()) }
+
+    private fun tone(frames: Int) = AudioBuffer(1, frames).apply {
+        this.frames = frames
+        for (i in 0 until frames) data[0][i] = (0.5 * sin(2 * PI * 1000.0 * i / rate)).toFloat()
+    }
+
+    @Test
+    fun `the first block plays at the profile's level, with no surge before the preamp arrives`() {
+        val profile = EqProfile(emptyList(), -7.4)
+        val processor = profile.createProcessor()
+        processor.prepare(AudioFormat(rate, 1, 480))
+        val first = tone(480)
+        processor.process(first)
+        val later = tone(480)
+        repeat(5) { processor.process(tone(480)) }
+        processor.process(later)
+        val expected = 0.5 * 10.0.pow(-7.4 / 20)
+        assertEquals(expected, blockPeak(first), 0.01)
+        assertEquals(blockPeak(later), blockPeak(first), 0.01)
+    }
+
+    @Test
+    fun `a preamp change glides instead of stepping`() {
+        val processor = EqProfile(emptyList(), 0.0).createProcessor()
+        processor.prepare(AudioFormat(rate, 1, 4800))
+        processor.update(EqProfile(emptyList(), -12.0))
+        val dc = AudioBuffer(1, 4800).apply {
+            frames = 4800
+            data[0].fill(0.5f)
+        }
+        processor.process(dc)
+        val steps = (1 until 4800).map { abs(dc.data[0][it] - dc.data[0][it - 1]) }
+        assertTrue(steps.max() < 0.01, "largest step ${steps.max()}")
+        assertEquals(0.5 * 10.0.pow(-12.0 / 20), dc.data[0][4799].toDouble(), 1e-4)
     }
 }
 

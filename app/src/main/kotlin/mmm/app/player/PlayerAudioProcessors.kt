@@ -8,8 +8,10 @@ import androidx.media3.common.audio.AudioProcessor
 import androidx.media3.common.audio.BaseAudioProcessor
 import androidx.media3.common.util.UnstableApi
 import mmm.dsp.AudioBuffer
-import mmm.dsp.artifacts.TubeProcessor
-import mmm.dsp.artifacts.TubeSettings
+import mmm.dsp.harmonics.HarmonicDrive
+import mmm.dsp.harmonics.HarmonicProcessor
+import mmm.dsp.harmonics.NosRolloff
+import mmm.dsp.harmonics.PeakLimiter
 import mmm.eq.EqProcessor
 import mmm.eq.EqProfile
 import java.nio.ByteBuffer
@@ -17,28 +19,40 @@ import java.nio.ByteOrder
 import kotlin.random.Random
 
 /**
- * The playback EQ and the valve harmonics inside ExoPlayer's audio pipeline.
+ * The playback chain inside ExoPlayer's audio pipeline: EQ, harmonics, NOS roll-off, limiter.
  *
  * Works on 16-bit PCM because that is what the pipeline hands its processors once float output is
- * off; the samples are processed in float and dithered back to 16 bits, so the EQ's preamp - which
- * leaves the loudest boost just under full scale - is what keeps it from clipping.
+ * off; the samples are processed in float and dithered back to 16 bits.
  *
- * Settings are swapped from the UI thread and picked up on the audio thread at the next buffer.
- * An EQ that only changed its numbers is updated in place, so dragging a band does not click;
- * anything else builds a new chain, which allocates, at the moment the listener changed something.
+ * Settings are handed over from the UI thread and picked up on the audio thread at the next
+ * buffer, and nothing is ever switched abruptly:
+ * - the chain is built from the settings it was given before playback started, so the first
+ *   buffer already plays at the level the EQ's preamp sets - never unprocessed first and quieter
+ *   a moment later, which is heard as a jump in volume at the start of a song;
+ * - an EQ with the same number of filters is updated in place, its preamp gliding;
+ * - an EQ of a different shape is built new and crossfaded in over [CROSSFADE_SECONDS];
+ * - the harmonics glide to their new gains, and the NOS roll-off fades in and out.
  */
 class EqAudioProcessor : BaseAudioProcessor() {
 
     @Volatile private var requested: EqProfile? = null
-    @Volatile private var requestedTube: TubeSettings? = null
+    @Volatile private var requestedHarmonics: HarmonicDrive = HarmonicDrive.SILENT
+    @Volatile private var requestedNos = false
     @Volatile private var dirty = true
 
     private var eq: EqProcessor? = null
-    private var tube: TubeProcessor? = null
-    private var tubeFor: TubeSettings? = null
+    /** The EQ being faded out, while [fadeLeft] > 0. */
+    private var outgoing: EqProcessor? = null
+    private var fadeLeft = 0
+    private var fadeFrames = 1
+    private var harmonics: HarmonicProcessor? = null
+    private var harmonicsFor: HarmonicDrive? = null
+    private val nos = NosRolloff()
+    private val limiter = PeakLimiter()
     private var builtRate = 0
     private var builtChannels = 0
     private var block = AudioBuffer(2, BLOCK_FRAMES)
+    private var faded = AudioBuffer(2, BLOCK_FRAMES)
     private val random = Random(0x5EED)
 
     fun setProfile(profile: EqProfile?) {
@@ -46,8 +60,13 @@ class EqAudioProcessor : BaseAudioProcessor() {
         dirty = true
     }
 
-    fun setTube(settings: TubeSettings?) {
-        requestedTube = settings
+    fun setHarmonics(drive: HarmonicDrive) {
+        requestedHarmonics = drive
+        dirty = true
+    }
+
+    fun setNos(on: Boolean) {
+        requestedNos = on
         dirty = true
     }
 
@@ -71,14 +90,6 @@ class EqAudioProcessor : BaseAudioProcessor() {
         val output = replaceOutputBuffer(bytes)
         if (dirty) refresh(format)
 
-        val activeEq = eq
-        val activeTube = tube
-        if (activeEq == null && activeTube == null) {
-            output.put(inputBuffer)
-            output.flip()
-            return
-        }
-
         val input = inputBuffer.order(ByteOrder.LITTLE_ENDIAN)
         output.order(ByteOrder.LITTLE_ENDIAN)
         var frames = bytes / (2 * channels)
@@ -88,8 +99,7 @@ class EqAudioProcessor : BaseAudioProcessor() {
             for (i in 0 until count) {
                 for (ch in 0 until channels) block.data[ch][i] = input.short / 32768f
             }
-            activeEq?.process(block)
-            activeTube?.process(block)
+            processBlock(count, channels)
             for (i in 0 until count) {
                 for (ch in 0 until channels) {
                     // TPDF dither: two uniform values summed, one LSB peak to peak each.
@@ -103,46 +113,95 @@ class EqAudioProcessor : BaseAudioProcessor() {
         output.flip()
     }
 
+    private fun processBlock(count: Int, channels: Int) {
+        val fading = outgoing
+        if (fading != null && fadeLeft > 0) {
+            // The old EQ plays a copy; the two are mixed along an equal-gain line.
+            faded.frames = count
+            for (ch in 0 until channels) System.arraycopy(block.data[ch], 0, faded.data[ch], 0, count)
+            fading.process(faded)
+            eq?.process(block)
+            val start = fadeLeft
+            for (ch in 0 until channels) {
+                val now = block.data[ch]
+                val old = faded.data[ch]
+                for (i in 0 until count) {
+                    val left = (start - i).coerceAtLeast(0)
+                    val w = left.toFloat() / fadeFrames
+                    now[i] = now[i] * (1f - w) + old[i] * w
+                }
+            }
+            fadeLeft = (fadeLeft - count).coerceAtLeast(0)
+            if (fadeLeft == 0) outgoing = null
+        } else {
+            eq?.process(block)
+        }
+        harmonics?.process(block)
+        nos.process(block)
+        limiter.process(block)
+    }
+
     override fun onFlush() {
         eq?.reset()
-        tube?.reset()
+        outgoing = null
+        fadeLeft = 0
+        harmonics?.reset()
+        nos.reset()
+        limiter.reset()
     }
 
     override fun onReset() {
         eq = null
-        tube = null
-        tubeFor = null
+        outgoing = null
+        fadeLeft = 0
+        harmonics = null
+        harmonicsFor = null
+        builtRate = 0
         dirty = true
     }
 
     private fun refresh(format: AudioProcessor.AudioFormat) {
         dirty = false
-        val profile = requested
-        val wantedTube = requestedTube
-        if (format.sampleRate != builtRate || format.channelCount != builtChannels) {
+        val profile = requested ?: EqProfile.FLAT
+        val drive = requestedHarmonics
+        val dsp = mmm.dsp.AudioFormat(format.sampleRate, format.channelCount, BLOCK_FRAMES)
+        val fresh = format.sampleRate != builtRate || format.channelCount != builtChannels
+        if (fresh) {
+            // A new stream: everything is built at the values it should play at, no glides.
             builtRate = format.sampleRate
             builtChannels = format.channelCount
             block = AudioBuffer(format.channelCount, BLOCK_FRAMES)
-            eq = null
-            tube = null
-            tubeFor = null
+            faded = AudioBuffer(format.channelCount, BLOCK_FRAMES)
+            fadeFrames = (CROSSFADE_SECONDS * format.sampleRate).toInt().coerceAtLeast(1)
+            eq = profile.createProcessor().also { it.prepare(dsp) }
+            outgoing = null
+            fadeLeft = 0
+            harmonics = HarmonicProcessor(drive).also { it.prepare(dsp) }
+            harmonicsFor = drive
+            nos.setEnabled(requestedNos)
+            nos.prepare(dsp)
+            limiter.prepare(dsp)
+            return
         }
-        val dsp = mmm.dsp.AudioFormat(format.sampleRate, format.channelCount, BLOCK_FRAMES)
 
         val current = eq
-        when {
-            profile == null -> eq = null
-            current != null -> current.update(profile)
-            else -> eq = profile.createProcessor().also { it.prepare(dsp) }
+        if (current != null && current.filterCount == profile.filters.size) {
+            current.update(profile)
+        } else {
+            outgoing = current
+            fadeLeft = if (current != null) fadeFrames else 0
+            eq = profile.createProcessor().also { it.prepare(dsp) }
         }
-        if (wantedTube != tubeFor || (wantedTube != null && tube == null)) {
-            tubeFor = wantedTube
-            tube = wantedTube?.let { settings -> TubeProcessor(settings).also { it.prepare(dsp) } }
+        if (drive !== harmonicsFor) {
+            harmonicsFor = drive
+            harmonics?.update(drive)
         }
+        nos.setEnabled(requestedNos)
     }
 
     private companion object {
         const val BLOCK_FRAMES = 1024
+        const val CROSSFADE_SECONDS = 0.03
     }
 }
 

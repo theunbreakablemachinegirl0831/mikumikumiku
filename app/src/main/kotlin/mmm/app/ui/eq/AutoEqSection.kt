@@ -123,7 +123,7 @@ internal fun AutoEqSection(
                     (source.targetName?.let { " (타깃: $it)" } ?: "") + " · 필터 ${auto.filters.size}개"
                 auto.rmsBeforeDb != null && auto.rmsAfterDb != null ->
                     "규칙 ${state.autoRules.size}개로 맞춤 · 필터 ${auto.filters.size}개 · 목표와의 차이 " +
-                        "${db(auto.rmsBeforeDb)} → ${db(auto.rmsAfterDb)} dB"
+                        "${db(auto.rmsBeforeDb)} → ${db(auto.rmsAfterDb)}\u00A0dB"
                 else -> "필터 ${auto.filters.size}개"
             },
             style = MaterialTheme.typography.bodySmall,

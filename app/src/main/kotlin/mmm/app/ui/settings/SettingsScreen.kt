@@ -1,5 +1,6 @@
 package mmm.app.ui.settings
 
+import mmm.app.ui.components.rememberTabScrollState
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -25,6 +26,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -50,35 +54,12 @@ import mmm.app.ui.theme.GlassDimensions
 import mmm.app.ui.theme.GlassShapes
 import mmm.app.ui.theme.GlassTheme
 import mmm.app.ui.theme.ThemeMode
-import mmm.app.ui.visual.visualizerColor
+import mmm.app.ui.visual.VisualizerSheet
+import mmm.app.ui.settings.BackgroundSheet
 import mmm.app.ui.components.glass.GlassTopBar
 import mmm.app.ui.components.glass.SectionHeader
 import mmm.app.ui.components.glass.SettingRow
 import mmm.app.ui.components.glass.Switch
-
-/** One colour to choose: a disc of it, ringed in the ink when it is the one in use. */
-@Composable
-private fun Swatch(color: Color, label: String, selected: Boolean, onClick: () -> Unit) {
-    val colors = GlassTheme.colors
-    Box(
-        Modifier
-            .size(GlassDimensions.touchTarget)
-            .semantics {
-                contentDescription = label
-                this.selected = selected
-            }
-            .clickable(role = Role.RadioButton, onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Box(
-            Modifier
-                .size(if (selected) 40.dp else 32.dp)
-                .border(if (selected) 3.dp else 1.dp, if (selected) colors.ink else colors.inkFaint, GlassShapes.circle)
-                .padding(if (selected) 6.dp else 0.dp)
-                .background(color, GlassShapes.circle),
-        )
-    }
-}
 
 /**
  * Everything that is a setting rather than a control, in one place, grouped as the reference
@@ -93,6 +74,8 @@ fun SettingsScreen(app: MmmApplication, onOpenEarphones: () -> Unit) {
     val earphones by app.earphones.earphones.collectAsStateWithLifecycle()
     val active = earphones.firstOrNull { it.id == settings.activeEarphoneId }
     val context = LocalContext.current
+    var visualizerSheet by rememberSaveable { mutableStateOf(false) }
+    var backgroundSheet by rememberSaveable { mutableStateOf(false) }
 
     val askRecord = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
         // The EQ works without it; only the spectrum of the other app needs it.
@@ -101,7 +84,7 @@ fun SettingsScreen(app: MmmApplication, onOpenEarphones: () -> Unit) {
     }
 
     Column(
-        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
+        modifier = Modifier.fillMaxSize().verticalScroll(rememberTabScrollState()).padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         GlassTopBar(title = "설정")
@@ -214,28 +197,17 @@ fun SettingsScreen(app: MmmApplication, onOpenEarphones: () -> Unit) {
                 )
             }
             GroupDivider()
-            Column(Modifier.padding(horizontal = 18.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Row {
-                    Text("비주얼라이저 색", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-                    Text(settings.visualizerColor.label, style = MaterialTheme.typography.bodyLarge, color = GlassTheme.colors.inkMuted)
-                }
-                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    VisualizerColor.entries.forEach { option ->
-                        Swatch(
-                            // Shown as it will look over artwork, where it is seen most.
-                            color = visualizerColor(option, onArtwork = true),
-                            label = option.label,
-                            selected = settings.visualizerColor == option,
-                            onClick = { app.settings.setVisualizerColor(option) },
-                        )
-                    }
-                }
-                Text(
-                    "앨범아트 위와 재생 EQ 그래프의 스펙트럼에 쓰인다. '기본'은 아트 위에서는 흰색, 그래프에서는 글자색이고, " +
-                        "'앨범 색'은 지금 곡의 앨범아트 색을 따라간다.",
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            }
+            SettingRow(
+                title = "배경",
+                subtitle = if (settings.backgroundMode == mmm.app.data.BackgroundMode.ALBUM) "앨범아트 색 따라가기" else "사용자 지정 그라데이션",
+                onClick = { backgroundSheet = true },
+            )
+            GroupDivider()
+            SettingRow(
+                title = "비주얼라이저 표시",
+                subtitle = "색 ${settings.visualizerColor.label} · 높이 ${settings.visualizerScaling.label} · 가중 ${settings.visualizerWeighting.label}",
+                onClick = { visualizerSheet = true },
+            )
             GroupDivider()
             SettingRow(
                 title = "앨범아트 위에 스펙트럼",
@@ -267,4 +239,7 @@ fun SettingsScreen(app: MmmApplication, onOpenEarphones: () -> Unit) {
         }
         Spacer(Modifier.height(LocalPanelInset.current))
     }
+
+    if (visualizerSheet) VisualizerSheet(app, onDismiss = { visualizerSheet = false })
+    if (backgroundSheet) BackgroundSheet(app, onDismiss = { backgroundSheet = false })
 }

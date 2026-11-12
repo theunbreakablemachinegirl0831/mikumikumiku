@@ -26,7 +26,7 @@ import androidx.compose.material.icons.rounded.FastForward
 import androidx.compose.material.icons.rounded.FastRewind
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
-import androidx.compose.material.icons.rounded.MoreHoriz
+import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Repeat
@@ -82,17 +82,29 @@ import mmm.app.ui.theme.GlassTheme
 import mmm.app.ui.theme.GlassShapes
 import mmm.app.ui.components.glass.GlassSlider
 import mmm.app.ui.components.glass.glass
+import mmm.app.data.TrainerSettings
+import mmm.app.sessioneq.SessionEqService
+import mmm.app.spotify.ExternalNowPlaying
+import mmm.app.ui.spotify.appName
 import mmm.app.ui.visual.PlayerSpectrumSource
+import mmm.app.ui.visual.SpectrumLayers
+import mmm.app.ui.visual.SpectrumOptions
 import mmm.app.ui.visual.SpectrumSource
-import mmm.app.ui.visual.drawSpectrum
+import mmm.app.ui.visual.VisualizerSheet
+import mmm.app.ui.visual.VisualizerSpectrumSource
+import mmm.app.ui.visual.drawSpectrumLayers
 import mmm.app.ui.visual.rememberSpectrum
-import mmm.app.ui.visual.visualizerColor
+import mmm.app.ui.visual.visualizerPaint
 import kotlin.math.roundToInt
 
 /**
  * The now-playing screen, laid out as the reference: the artwork as large as the screen allows
  * with the spectrum moving across its foot, the title and a heart, the position, the transport,
  * the volume, a row of four small controls and the format line - all on one screen, no scrolling.
+ *
+ * With [external] it shows another app's playback (Spotify) the same way, so the mini player
+ * opens into the same screen whichever it is showing. What the other app does not let this one
+ * do - favourites, repeat, shuffle, its queue - is left out rather than shown disabled.
  *
  * @param artAlpha the artwork's opacity: while the screen is opening or closing the artwork is
  *   drawn by the shell, flying between here and the mini player, and this one stays hidden
@@ -106,6 +118,7 @@ fun NowPlayingScreen(
     onArtBounds: (Rect) -> Unit,
     onOpenEq: () -> Unit,
     modifier: Modifier = Modifier,
+    external: ExternalNowPlaying? = null,
 ) {
     val library by app.library.state.collectAsStateWithLifecycle()
     val settings by app.settings.settings.collectAsStateWithLifecycle()
@@ -113,10 +126,26 @@ fun NowPlayingScreen(
     val profile by app.eq.profile.collectAsStateWithLifecycle()
     val format by PlaybackService.format.collectAsStateWithLifecycle()
     val report by app.live.usb.report.collectAsStateWithLifecycle()
+    val sessions by SessionEqService.status.collectAsStateWithLifecycle()
     val colors = GlassTheme.colors
     var menu by remember { mutableStateOf(false) }
     var queue by remember { mutableStateOf(false) }
-    val favorite = now.trackId != null && now.trackId in library.favorites
+    var visualizer by remember { mutableStateOf(false) }
+    val favorite = external == null && now.trackId != null && now.trackId in library.favorites
+
+    val playing = external?.isPlaying ?: now.isPlaying
+    val title = if (external != null) external.title ?: "제목 없음" else now.title ?: "재생 중인 곡 없음"
+    val subtitle = if (external != null) {
+        listOfNotNull(external.artist, external.album?.takeIf { it.isNotBlank() }, appName(external.packageName)).joinToString(" · ")
+    } else {
+        listOfNotNull(now.artist, now.album?.takeIf { it.isNotBlank() }).joinToString(" · ").ifBlank { "곡을 고르면 여기에 나온다" }
+    }
+    val duration = external?.durationMs ?: now.durationMs
+    val position = if (external != null) {
+        rememberPlaybackPosition(running = external.isPlaying, anchor = external.positionMs to external.positionAt) { external.positionNow() }
+    } else {
+        rememberPlaybackPosition(running = now.isPlaying, anchor = now.positionMs to now.trackId) { app.player.positionNow() }
+    }
 
     Column(
         modifier.fillMaxSize().padding(horizontal = 24.dp),
@@ -125,13 +154,12 @@ fun NowPlayingScreen(
         // The artwork takes whatever height the controls leave, and stays square.
         Box(Modifier.weight(1f).fillMaxWidth().padding(top = 8.dp), contentAlignment = Alignment.Center) {
             ArtWithSpectrum(
-                trackId = now.trackId,
-                bitmap = now.artwork,
-                playing = now.isPlaying,
-                source = PlayerSpectrumSource,
-                points = settings.visualizerPoints,
-                showSpectrum = settings.artVisualizer,
-                spectrumColor = visualizerColor(settings.visualizerColor, onArtwork = true),
+                trackId = if (external != null) null else now.trackId,
+                bitmap = external?.artwork ?: now.artwork.takeIf { external == null },
+                playing = playing,
+                source = if (external != null) VisualizerSpectrumSource else PlayerSpectrumSource,
+                settings = settings,
+                showSpectrum = settings.artVisualizer && (external == null || sessions.sessions.any { it.error == null }),
                 modifier = Modifier
                     .aspectRatio(1f)
                     .onGloballyPositioned { onArtBounds(it.boundsInRoot()) }
@@ -141,84 +169,92 @@ fun NowPlayingScreen(
 
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(
-                    now.title ?: "재생 중인 곡 없음",
-                    style = MaterialTheme.typography.headlineSmall,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    listOfNotNull(now.artist, now.album?.takeIf { it.isNotBlank() }).joinToString(" · ").ifBlank { "곡을 고르면 여기에 나온다" },
-                    style = MaterialTheme.typography.bodyLarge,
+                    subtitle,
+                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            IconButton(onClick = { now.trackId?.let(app.library::toggleFavorite) }, enabled = now.trackId != null) {
-                Crossfade(favorite, label = "heart") { on ->
-                    Icon(
-                        if (on) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-                        contentDescription = if (on) "즐겨찾기에서 빼기" else "즐겨찾기에 추가",
-                        modifier = Modifier.size(28.dp),
-                    )
+            if (external == null) {
+                IconButton(onClick = { now.trackId?.let(app.library::toggleFavorite) }, enabled = now.trackId != null) {
+                    Crossfade(favorite, label = "heart") { on ->
+                        Icon(
+                            if (on) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                            contentDescription = if (on) "즐겨찾기에서 빼기" else "즐겨찾기에 추가",
+                            modifier = Modifier.size(26.dp),
+                        )
+                    }
                 }
             }
         }
 
         SeekBar(
-            positionMs = now.positionMs,
-            durationMs = now.durationMs,
-            badge = format?.codec,
-            onSeek = app.player::seekTo,
+            position = { position.longValue },
+            durationMs = duration,
+            badge = if (external == null) format?.codec else null,
+            onSeek = if (external != null) app.external::seekTo else app.player::seekTo,
         )
 
         Transport(
-            playing = now.isPlaying,
-            onPrevious = app.player::previous,
-            onToggle = app.player::toggle,
-            onNext = app.player::next,
+            playing = playing,
+            onPrevious = if (external != null) app.external::previous else app.player::previous,
+            onToggle = if (external != null) app.external::toggle else app.player::toggle,
+            onNext = if (external != null) app.external::next else app.player::next,
         )
 
         VolumeRow()
 
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = app.player::cycleRepeat) {
-                Icon(
-                    if (now.repeatMode == Player.REPEAT_MODE_ONE) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat,
-                    contentDescription = "반복",
-                    tint = if (now.repeatMode == Player.REPEAT_MODE_OFF) colors.ink.copy(alpha = 0.45f) else colors.ink,
-                )
-            }
-            IconButton(onClick = app.player::toggleShuffle) {
-                Icon(Icons.Rounded.Shuffle, contentDescription = "셔플", tint = if (now.shuffle) colors.ink else colors.ink.copy(alpha = 0.45f))
+            if (external == null) {
+                IconButton(onClick = app.player::cycleRepeat) {
+                    Icon(
+                        if (now.repeatMode == Player.REPEAT_MODE_ONE) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat,
+                        contentDescription = "반복",
+                        tint = if (now.repeatMode == Player.REPEAT_MODE_OFF) colors.ink.copy(alpha = 0.45f) else colors.ink,
+                    )
+                }
+                IconButton(onClick = app.player::toggleShuffle) {
+                    Icon(Icons.Rounded.Shuffle, contentDescription = "셔플", tint = if (now.shuffle) colors.ink else colors.ink.copy(alpha = 0.45f))
+                }
             }
             IconButton(onClick = onOpenEq) {
                 Icon(Icons.Rounded.Tune, contentDescription = "재생 EQ", tint = if (eq.enabled && profile != null) colors.ink else colors.ink.copy(alpha = 0.45f))
             }
             Box {
-                IconButton(onClick = { menu = true }) { Icon(Icons.Rounded.MoreHoriz, contentDescription = "더 보기") }
+                IconButton(onClick = { menu = true }) { Icon(Icons.Rounded.MoreVert, contentDescription = "더 보기") }
                 GlassMenu(expanded = menu, onDismissRequest = { menu = false }) {
                     DropdownMenuItem(
-                        text = { Text("대기열 보기") },
-                        enabled = now.queue.isNotEmpty(),
+                        text = { Text("비주얼라이저 색 · 표시") },
                         onClick = {
                             menu = false
-                            queue = true
+                            visualizer = true
                         },
                     )
-                    val trackId = now.trackId
-                    if (trackId != null) {
-                        val lists = library.playlists.filter { it.name != LibraryRepository.FAVORITES }
-                        if (lists.isNotEmpty()) HorizontalDivider()
-                        lists.forEach { playlist ->
-                            DropdownMenuItem(
-                                text = { Text("'${playlist.name}'에 추가") },
-                                onClick = {
-                                    menu = false
-                                    app.library.addToPlaylist(playlist.name, trackId)
-                                },
-                            )
+                    if (external == null) {
+                        DropdownMenuItem(
+                            text = { Text("대기열 보기") },
+                            enabled = now.queue.isNotEmpty(),
+                            onClick = {
+                                menu = false
+                                queue = true
+                            },
+                        )
+                        val trackId = now.trackId
+                        if (trackId != null) {
+                            val lists = library.playlists.filter { it.name != LibraryRepository.FAVORITES }
+                            if (lists.isNotEmpty()) HorizontalDivider()
+                            lists.forEach { playlist ->
+                                DropdownMenuItem(
+                                    text = { Text("'${playlist.name}'에 추가") },
+                                    onClick = {
+                                        menu = false
+                                        app.library.addToPlaylist(playlist.name, trackId)
+                                    },
+                                )
+                            }
                         }
                     }
                 }
@@ -228,6 +264,7 @@ fun NowPlayingScreen(
         Box(Modifier.fillMaxWidth().padding(bottom = 6.dp), contentAlignment = Alignment.Center) {
             Text(
                 when {
+                    external != null -> if (eq.systemEq && eq.enabled) "${appName(external.packageName)} · 재생 EQ 적용 중" else appName(external.packageName)
                     report.claim?.claimed == true -> "실시간 모드가 USB DAC을 점유 중이라 소리가 폰 스피커로 나간다"
                     else -> formatLine(format, processed = profile != null || (eq.enabled && eq.tubeEnabled))
                 },
@@ -241,8 +278,8 @@ fun NowPlayingScreen(
 
     if (queue) {
         GlassBottomSheet(onDismiss = { queue = false }) {
-            Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).navigationBarsPadding().padding(bottom = 16.dp)) {
-                Text("대기열", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
+            Text("대기열", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
+            Column(Modifier.fillMaxWidth().weight(1f, fill = false).verticalScroll(rememberScrollState()).navigationBarsPadding().padding(bottom = 16.dp)) {
                 now.queue.forEachIndexed { index, title ->
                     val current = index == now.queueIndex
                     Text(
@@ -260,6 +297,7 @@ fun NowPlayingScreen(
             }
         }
     }
+    if (visualizer) VisualizerSheet(app, onDismiss = { visualizer = false })
 }
 
 /**
@@ -272,9 +310,8 @@ fun ArtWithSpectrum(
     bitmap: ImageBitmap?,
     playing: Boolean,
     source: SpectrumSource,
-    points: Int,
+    settings: TrainerSettings,
     showSpectrum: Boolean,
-    spectrumColor: Color = Color.White,
     modifier: Modifier = Modifier,
     corner: Dp = 28.dp,
 ) {
@@ -290,16 +327,17 @@ fun ArtWithSpectrum(
             Artwork(trackId = id, size = 2000.dp, corner = corner, bitmap = image, modifier = Modifier.fillMaxSize())
         }
         if (showSpectrum) {
-            val spectrum = rememberSpectrum(source, playing, points)
+            val spectrum = rememberSpectrum(source, playing, SpectrumOptions.of(settings))
+            val paint = visualizerPaint(settings, onArtwork = true)
+            val layers = SpectrumLayers.of(settings)
             Canvas(Modifier.matchParentSize().clip(RoundedCornerShape(corner))) {
-                spectrum.frame // read so the wave redraws every frame
                 val area = Rect(Offset(0f, size.height * 0.5f), Size(size.width, size.height * 0.5f))
                 drawRect(
                     Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.32f)), startY = area.top, endY = area.bottom),
                     topLeft = area.topLeft,
                     size = area.size,
                 )
-                drawSpectrum(spectrum.levels, area, color = spectrumColor, fillAlpha = 0.42f, lineAlpha = 0.95f)
+                drawSpectrumLayers(spectrum, layers, area, paint, fillAlpha = 0.42f, lineAlpha = 0.95f)
             }
         }
     }
@@ -307,11 +345,13 @@ fun ArtWithSpectrum(
 
 /** The position slider with the times under it and, between them, what kind of file it is. */
 @Composable
-fun SeekBar(positionMs: Long, durationMs: Long, badge: String?, onSeek: (Long) -> Unit) {
+fun SeekBar(position: () -> Long, durationMs: Long, badge: String?, onSeek: (Long) -> Unit) {
     val colors = GlassTheme.colors
     var dragging by remember { mutableStateOf(false) }
     var dragValue by remember { mutableFloatStateOf(0f) }
     val duration = durationMs.coerceAtLeast(1)
+    // Read here, in the seek bar's own scope: each tick recomposes this bar and its times, nothing else.
+    val positionMs = position()
     Column {
         GlassSlider(
             value = if (dragging) dragValue else (positionMs.toFloat() / duration).coerceIn(0f, 1f),
@@ -408,7 +448,7 @@ fun VolumeRow() {
 /** "16 bit 44.1 kHz 753 kbps → EQ · 16 bit 44.1 kHz": what the file is, and what is sent on. */
 private fun formatLine(format: PlaybackFormat?, processed: Boolean): String {
     if (format == null) return if (processed) "EQ 켜짐" else "EQ 꺼짐"
-    val rate = (format.sampleRate / 100).let { if (it % 10 == 0) "${it / 10}" else "${it / 10}.${it % 10}" } + " kHz"
-    val source = listOfNotNull(format.bits?.let { "$it bit" }, rate, format.bitrateKbps?.let { "$it kbps" }).joinToString(" ")
-    return "$source\n→ ${if (processed) "EQ · " else ""}16 bit $rate"
+    val rate = (format.sampleRate / 100).let { if (it % 10 == 0) "${it / 10}" else "${it / 10}.${it % 10}" } + "\u00A0kHz"
+    val source = listOfNotNull(format.bits?.let { "$it\u00A0bit" }, rate, format.bitrateKbps?.let { "$it\u00A0kbps" }).joinToString(" ")
+    return "$source\n→ ${if (processed) "EQ · " else ""}16\u00A0bit $rate"
 }

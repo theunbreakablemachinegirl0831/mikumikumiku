@@ -2,6 +2,7 @@ package mmm.app.ui.components.glass
 
 import android.os.Build
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -23,6 +24,7 @@ import androidx.compose.ui.graphics.BlurEffect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TileMode
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
@@ -33,9 +35,13 @@ import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
+import mmm.app.data.GradientSpec
 import mmm.app.ui.theme.DefaultTint
 import mmm.app.ui.theme.GlassTheme
+import kotlin.math.abs
 import kotlin.math.ceil
+import kotlin.math.cos
+import kotlin.math.sin
 
 /**
  * What floating glass can see through: the screen content, kept as a drawing the glass can draw
@@ -120,11 +126,19 @@ internal fun Modifier.glassBackdropBlur(state: GlassBackdropState?, radius: Dp):
  * colour slowly when the track changes, and that slow change under still panes is a large part of
  * what makes them read as glass.
  *
- * On dark it runs from the tint down to near-black. On light it is the neutral with the tint
- * breathed over the top - a light theme that took the tint at full strength would stop being light.
+ * On dark it runs from the tint down to near-black. On light it is a pastel of the tint, never
+ * plain white: glass on a light theme reads by being whiter than what is behind it, so there has
+ * to be colour behind it to be whiter than.
+ *
+ * With [custom] the listener's own gradient is drawn instead, at its angle and stops; every part
+ * of it glides to a new setting rather than jumping, so editing it is a live preview.
  */
 @Composable
-fun Backdrop(tint: Color, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+fun Backdrop(tint: Color, modifier: Modifier = Modifier, custom: GradientSpec? = null, content: @Composable () -> Unit) {
+    if (custom != null) {
+        CustomBackdrop(custom, modifier, content)
+        return
+    }
     val colors = GlassTheme.colors
     val animated by animateColorAsState(tint, animationSpec = tween(900), label = "backdrop")
     val top: Color
@@ -137,28 +151,71 @@ fun Backdrop(tint: Color, modifier: Modifier = Modifier, content: @Composable ()
         glow = lerp(animated, Color.White, 0.25f).copy(alpha = 0.35f)
         glow2 = lerp(animated, Color(0xFF3050FF), 0.4f).copy(alpha = 0.22f)
     } else {
-        top = lerp(animated, Color.White, 0.62f)
-        bottom = lerp(animated, colors.canvas, 0.9f)
-        glow = Color.White.copy(alpha = 0.7f)
-        glow2 = lerp(animated, Color(0xFF9DB8FF), 0.5f).copy(alpha = 0.28f)
+        top = lerp(animated, Color.White, 0.42f)
+        bottom = lerp(animated, colors.canvas, 0.72f)
+        glow = Color.White.copy(alpha = 0.55f)
+        glow2 = lerp(animated, Color(0xFF9DB8FF), 0.35f).copy(alpha = 0.45f)
     }
     Box(
         modifier
             .fillMaxSize()
             .background(Brush.verticalGradient(listOf(top, bottom)))
+            .drawBehind { drawGlows(glow, glow2) },
+    ) {
+        CompositionLocalProvider(LocalBackdropTint provides tint) { content() }
+    }
+}
+
+@Composable
+private fun CustomBackdrop(spec: GradientSpec, modifier: Modifier, content: @Composable () -> Unit) {
+    val motion = tween<Color>(600)
+    val start by animateColorAsState(Color(spec.start), motion, label = "bg-start")
+    val middle by animateColorAsState(Color(spec.middle ?: spec.start), motion, label = "bg-middle")
+    val end by animateColorAsState(Color(spec.end), motion, label = "bg-end")
+    val angle by animateFloatAsState(spec.angleDegrees, tween(600), label = "bg-angle")
+    val offset by animateFloatAsState(spec.offset, tween(600), label = "bg-offset")
+    val startStop by animateFloatAsState(spec.startStop, tween(600), label = "bg-s0")
+    val middleStop by animateFloatAsState(spec.middleStop, tween(600), label = "bg-s1")
+    val endStop by animateFloatAsState(spec.endStop, tween(600), label = "bg-s2")
+    val hasMiddle = spec.middle != null
+    // Panes take their colour from the middle of the gradient, so they sit in it rather than on it.
+    val tint = lerp(Color(spec.start), Color(spec.end), 0.5f).let { if (spec.middle != null) lerp(it, Color(spec.middle), 0.5f) else it }
+    Box(
+        modifier
+            .fillMaxSize()
             .drawBehind {
-                drawCircle(
-                    Brush.radialGradient(listOf(glow, Color.Transparent), center = Offset(size.width * 0.15f, size.height * 0.12f), radius = size.width * 0.9f),
-                    radius = size.width * 0.9f,
-                    center = Offset(size.width * 0.15f, size.height * 0.12f),
-                )
-                drawCircle(
-                    Brush.radialGradient(listOf(glow2, Color.Transparent), center = Offset(size.width * 0.95f, size.height * 0.6f), radius = size.width * 0.8f),
-                    radius = size.width * 0.8f,
-                    center = Offset(size.width * 0.95f, size.height * 0.6f),
-                )
+                val radians = Math.toRadians(angle.toDouble())
+                val dx = sin(radians).toFloat()
+                val dy = cos(radians).toFloat()
+                // The line through the centre at the angle, long enough to reach every corner.
+                val length = abs(size.width * dx) + abs(size.height * dy)
+                val centre = Offset(size.width / 2, size.height / 2) + Offset(dx, dy) * (offset * length)
+                val from = centre - Offset(dx, dy) * (length / 2)
+                val to = centre + Offset(dx, dy) * (length / 2)
+                val s0 = startStop.coerceIn(0f, 1f)
+                val s2 = endStop.coerceIn(s0, 1f)
+                val stops = if (hasMiddle) {
+                    arrayOf(s0 to start, middleStop.coerceIn(s0, s2) to middle, s2 to end)
+                } else {
+                    arrayOf(s0 to start, s2 to end)
+                }
+                drawRect(Brush.linearGradient(*stops, start = from, end = to))
+                drawGlows(Color.White.copy(alpha = 0.12f), Color.White.copy(alpha = 0.06f))
             },
     ) {
         CompositionLocalProvider(LocalBackdropTint provides tint) { content() }
     }
+}
+
+private fun DrawScope.drawGlows(glow: Color, glow2: Color) {
+    drawCircle(
+        Brush.radialGradient(listOf(glow, Color.Transparent), center = Offset(size.width * 0.15f, size.height * 0.12f), radius = size.width * 0.9f),
+        radius = size.width * 0.9f,
+        center = Offset(size.width * 0.15f, size.height * 0.12f),
+    )
+    drawCircle(
+        Brush.radialGradient(listOf(glow2, Color.Transparent), center = Offset(size.width * 0.95f, size.height * 0.6f), radius = size.width * 0.8f),
+        radius = size.width * 0.8f,
+        center = Offset(size.width * 0.95f, size.height * 0.6f),
+    )
 }

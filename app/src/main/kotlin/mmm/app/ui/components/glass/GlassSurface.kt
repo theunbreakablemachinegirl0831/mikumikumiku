@@ -84,7 +84,8 @@ fun Modifier.glass(
 
     return this
         // Only what floats casts a halo: a pane lying in the content has nothing under it to fall on.
-        .then(if (floating || level == GlassLevel.Prominent) Modifier.glassShadow(shape, material) else Modifier)
+        // On light every grade casts one (see LightGlass): there it is the shadow that shows the pane at all.
+        .then(if (floating || level == GlassLevel.Prominent || !colors.isDark) Modifier.glassShadow(shape, material) else Modifier)
         .clip(shape)
         .glassBackdropBlur(backdrop, material.blurRadius)
         .drawWithCache {

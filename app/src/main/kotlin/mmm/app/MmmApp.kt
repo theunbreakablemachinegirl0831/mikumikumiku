@@ -59,7 +59,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -100,9 +99,11 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import mmm.app.data.BackgroundMode
 import mmm.app.player.NowPlaying
+import mmm.app.ui.components.LocalTabVisit
+import mmm.app.ui.player.rememberPlaybackPosition
 import mmm.app.ui.audiometry.AudiometryScreen
 import mmm.app.ui.earphone.EarphoneScreen
 import mmm.app.ui.earphone.EarphoneSearchScreen
@@ -271,7 +272,6 @@ fun MmmApp(app: MmmApplication) {
     }
 
     BackHandler(enabled = open) { settle(0f) }
-    LaunchedEffect(now.hasMedia) { if (!now.hasMedia) expand.snapTo(0f) }
 
     // The mini player shows whichever is being listened to: this app's player or another app's
     // (Spotify). Whichever started playing last keeps it while both are paused.
@@ -282,14 +282,23 @@ fun MmmApp(app: MmmApplication) {
             external.isPlaying -> externalLast = true
         }
     }
-    val showExternal = external.hasSession && !open && (externalLast || !now.hasMedia)
-    // Other apps report their position only when it jumps; in between it is worked out from the clock.
-    var externalPosition by remember { mutableLongStateOf(0L) }
-    LaunchedEffect(showExternal, external.positionMs, external.positionAt, external.isPlaying) {
-        while (showExternal) {
-            externalPosition = external.positionNow()
-            delay(500)
-        }
+    val showExternal = external.hasSession && (externalLast || !now.hasMedia)
+    LaunchedEffect(now.hasMedia, external.hasSession) { if (!now.hasMedia && !external.hasSession) expand.snapTo(0f) }
+
+    // Each tab picked counts as a visit; a tab's screen goes back to its top on a new one.
+    var tabVisit by remember { mutableIntStateOf(0) }
+    fun openTab(target: String) {
+        tabVisit++
+        nav.goToTab(target)
+    }
+
+    // The mini player's progress line, read every 50 ms from the player it shows. Only the line's
+    // drawing reads these, so they redraw it and nothing else.
+    val localPosition = rememberPlaybackPosition(running = now.isPlaying && !open, anchor = now.positionMs to now.trackId) {
+        app.player.positionNow()
+    }
+    val externalPosition = rememberPlaybackPosition(running = showExternal && external.isPlaying && !open, anchor = external.positionMs to external.positionAt) {
+        external.positionNow()
     }
     // Looked at again whenever the app comes back: what other apps play changes while it is away.
     LifecycleResumeEffect(Unit) {
@@ -303,10 +312,10 @@ fun MmmApp(app: MmmApplication) {
             title = external.title ?: appName(external.packageName),
             subtitle = listOfNotNull(external.artist, appName(external.packageName)).joinToString(" · "),
             isPlaying = external.isPlaying,
-            progress = { if (external.durationMs > 0) (externalPosition.toFloat() / external.durationMs).coerceIn(0f, 1f) else 0f },
+            progress = { if (external.durationMs > 0) (externalPosition.longValue.toFloat() / external.durationMs).coerceIn(0f, 1f) else 0f },
             onToggle = app.external::toggle,
-            onOpen = { nav.goToTab(Routes.SPOTIFY) },
-            expandable = false,
+            onOpen = { settle(1f) },
+            expandable = true,
         )
         now.hasMedia -> MiniPlayer(
             trackId = now.trackId,
@@ -314,7 +323,7 @@ fun MmmApp(app: MmmApplication) {
             title = now.title.orEmpty(),
             subtitle = listOfNotNull(now.artist, now.album?.takeIf { it.isNotBlank() }).joinToString(" · "),
             isPlaying = now.isPlaying,
-            progress = { if (now.durationMs > 0) (now.positionMs.toFloat() / now.durationMs).coerceIn(0f, 1f) else 0f },
+            progress = { if (now.durationMs > 0) (localPosition.longValue.toFloat() / now.durationMs).coerceIn(0f, 1f) else 0f },
             onToggle = app.player::toggle,
             onOpen = { settle(1f) },
             expandable = true,
@@ -322,8 +331,9 @@ fun MmmApp(app: MmmApplication) {
         else -> null
     }
 
-    val tint = (if (route == Routes.SPOTIFY && !open) external.tint else null) ?: now.tint ?: DefaultTint
+    val tint = (if ((route == Routes.SPOTIFY && !open) || (open && showExternal)) external.tint else null) ?: now.tint ?: DefaultTint
     val settings by app.settings.settings.collectAsStateWithLifecycle()
+    val customBackground = settings.backgroundGradient.takeIf { settings.backgroundMode == BackgroundMode.CUSTOM }
     // What the floating panel sees through and blurs: the backdrop and every screen on it. The
     // panel itself is drawn beside this, not inside it, or it would be looking at itself.
     val backdrop = rememberGlassBackdrop(settings.backdropBlur)
@@ -331,7 +341,7 @@ fun MmmApp(app: MmmApplication) {
     CompositionLocalProvider(LocalGlassBackdrop provides backdrop, LocalBackdropTint provides tint) {
         Box(Modifier.fillMaxSize()) {
             Box(Modifier.fillMaxSize().glassBackdropSource(backdrop)) {
-                Backdrop(tint = tint) {
+                Backdrop(tint = tint, custom = customBackground) {
                     Box(
                         Modifier
                             .fillMaxSize()
@@ -342,8 +352,8 @@ fun MmmApp(app: MmmApplication) {
                             },
                     ) {
                         val inset = if (onTab) with(density) { panelHeight.toDp() } + 12.dp else 0.dp
-                        CompositionLocalProvider(LocalPanelInset provides inset) {
-                            AppNavHost(app, nav)
+                        CompositionLocalProvider(LocalPanelInset provides inset, LocalTabVisit provides tabVisit) {
+                            AppNavHost(app, nav, onTab = ::openTab)
                         }
 
                         if (open) {
@@ -355,16 +365,17 @@ fun MmmApp(app: MmmApplication) {
                                     .graphicsLayer { alpha = (expand.value * 1.8f).coerceIn(0f, 1f) }
                                     .pointerInput(Unit) { detectTapGestures { } },
                             ) {
-                                Backdrop(tint = now.tint ?: DefaultTint) {}
+                                Backdrop(tint = (if (showExternal) external.tint else now.tint) ?: DefaultTint, custom = customBackground) {}
                             }
                             NowPlayingScreen(
                                 app = app,
                                 now = now,
+                                external = external.takeIf { showExternal },
                                 artAlpha = { if (expand.value >= SETTLED) 1f else 0f },
                                 onArtBounds = { fullArt = it },
                                 onOpenEq = {
                                     settle(0f)
-                                    nav.goToTab(Routes.EQ)
+                                    openTab(Routes.EQ)
                                 },
                                 modifier = Modifier
                                     .padding(bottom = with(density) { iconRowHeight.toDp() } + PANEL_MARGIN * 2)
@@ -391,12 +402,12 @@ fun MmmApp(app: MmmApplication) {
                 ) {
                     BottomPanel(
                         // On the Spotify tab the same thing is already on screen, larger.
-                        mini = mini?.takeUnless { showExternal && route == Routes.SPOTIFY },
-                        selected = TABS.indexOfFirst { it.route == if (open) Routes.PLAYER else route },
+                        mini = mini?.takeUnless { showExternal && route == Routes.SPOTIFY && !open },
+                        selected = TABS.indexOfFirst { it.route == if (open) (if (showExternal) Routes.SPOTIFY else Routes.PLAYER) else route },
                         progress = { expand.value },
                         onTab = { target ->
                             settle(0f)
-                            nav.goToTab(target)
+                            openTab(target)
                         },
                         onMiniArt = { miniArt = it },
                         onIconRowHeight = { iconRowHeight = it },
@@ -407,12 +418,12 @@ fun MmmApp(app: MmmApplication) {
 
                 // The artwork in flight: one picture, drawn at the full size and scaled down towards the
                 // mini player, so it is the same pixels all the way and nothing pops.
-                if (open && !showExternal && fullArt.width > 0f && miniArt.width > 0f) {
+                if (open && fullArt.width > 0f && miniArt.width > 0f) {
                     Artwork(
-                        trackId = now.trackId,
+                        trackId = if (showExternal) null else now.trackId,
                         size = with(density) { fullArt.width.toDp() },
                         corner = 28.dp,
-                        bitmap = now.artwork,
+                        bitmap = if (showExternal) external.artwork else now.artwork,
                         modifier = Modifier.graphicsLayer {
                             val p = expand.value
                             val scale = (miniArt.width + (fullArt.width - miniArt.width) * p) / fullArt.width
@@ -508,7 +519,7 @@ private fun BottomPanel(
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,
-                            onClickLabel = if (content.expandable) "재생 화면 열기" else "Spotify 탭 열기",
+                            onClickLabel = "재생 화면 열기",
                             onClick = content.onOpen,
                         )
                         .padding(start = 12.dp, end = 8.dp, top = 12.dp),
@@ -554,7 +565,7 @@ private fun BottomPanel(
 private val NAV_ITEMS = TABS.map { GlassNavItem(it.label, it.icon) }
 
 @Composable
-private fun AppNavHost(app: MmmApplication, nav: NavHostController) {
+private fun AppNavHost(app: MmmApplication, nav: NavHostController, onTab: (String) -> Unit) {
     NavHost(
         navController = nav,
         startDestination = Routes.HUB,
@@ -582,7 +593,7 @@ private fun AppNavHost(app: MmmApplication, nav: NavHostController) {
                 onFindEarphone = { nav.navigate(Routes.earphoneSearch(pick = true)) },
             )
         }
-        composable(Routes.SPOTIFY) { SpotifyScreen(app, onOpenEq = { nav.goToTab(Routes.EQ) }) }
+        composable(Routes.SPOTIFY) { SpotifyScreen(app, onOpenEq = { onTab(Routes.EQ) }) }
         composable(Routes.SETTINGS) { SettingsScreen(app, onOpenEarphones = { nav.navigate(Routes.EARPHONES) }) }
 
         composable(

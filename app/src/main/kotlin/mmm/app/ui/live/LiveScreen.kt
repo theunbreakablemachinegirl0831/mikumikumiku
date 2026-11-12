@@ -137,7 +137,7 @@ private fun DacCard(report: UsbAudioReport, status: LiveStatus, live: LiveSessio
             style = MaterialTheme.typography.bodyMedium,
         )
         report.chosenAlternate?.let {
-            Text("형식: ${it.describe} · ${status.sampleRate / 1000.0} kHz", style = MaterialTheme.typography.bodySmall)
+            Text("형식: ${it.describe} · ${status.sampleRate / 1000.0}\u00A0kHz", style = MaterialTheme.typography.bodySmall)
         }
         FlowRow2 {
             when {
@@ -197,7 +197,7 @@ private fun CaptureCard(status: LiveStatus, capture: CaptureState, live: LiveSes
                 when (capture) {
                     CaptureState.Idle -> "대기 중"
                     CaptureState.Starting -> "시작하는 중"
-                    is CaptureState.Running -> "캡처 중 · ${capture.sampleRate / 1000.0} kHz · 지연 약 ${capture.latencyMs} ms"
+                    is CaptureState.Running -> "캡처 중 · ${capture.sampleRate / 1000.0} kHz · 지연 약 ${capture.latencyMs}\u00A0ms"
                     is CaptureState.Failed -> "실패: ${capture.reason}"
                 },
                 style = MaterialTheme.typography.bodyMedium,

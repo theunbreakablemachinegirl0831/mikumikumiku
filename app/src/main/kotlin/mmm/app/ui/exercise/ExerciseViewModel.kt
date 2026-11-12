@@ -220,7 +220,7 @@ class ExerciseViewModel(
     private fun describe(overrides: FilterOverrides): String? {
         if (!overrides.isActive) return null
         val parts = listOfNotNull(
-            overrides.gainDb?.let { "게인 ±${trim(it)} dB" },
+            overrides.gainDb?.let { "게인 ±${trim(it)}\u00A0dB" },
             overrides.q?.let { "Q ${trim(it)}" },
         )
         return "사용자 지정 필터: ${parts.joinToString(" · ")} - 레벨 설명의 값 대신 적용된다"

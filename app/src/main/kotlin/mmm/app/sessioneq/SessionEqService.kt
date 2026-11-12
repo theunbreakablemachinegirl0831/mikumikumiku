@@ -157,7 +157,7 @@ class SessionEqService : Service() {
         // Not every device takes the full band count; fall back to coarser grids.
         for (perOctave in PlaybackEq.SYSTEM_BANDS.filter { it <= bandsPerOctave }) {
             val bands = GraphicEqBands.from(profile ?: EqProfile.FLAT, perOctave)
-            val effect = runCatching { create(session, bands.bands.size) }.getOrElse {
+            val effect = runCatching { create(session, bands, profile != null) }.getOrElse {
                 lastError = it
                 null
             } ?: continue
@@ -180,15 +180,26 @@ class SessionEqService : Service() {
         publish()
     }
 
-    private fun create(session: Int, bandCount: Int): DynamicsProcessing {
+    /**
+     * Makes the effect with the bands and input gain already in its configuration, and only then
+     * switches it on. Made empty and filled afterwards, it would play a moment of the app's audio
+     * at unity gain before the EQ's preamp arrived - a surge at the start of every song.
+     */
+    private fun create(session: Int, bands: GraphicEqBands, active: Boolean): DynamicsProcessing {
         val config = DynamicsProcessing.Config.Builder(
             DynamicsProcessing.VARIANT_FAVOR_FREQUENCY_RESOLUTION,
             CHANNELS,
-            true, bandCount,
+            true, bands.bands.size,
             false, 0,
             false, 0,
             false,
         ).build()
+        val eq = DynamicsProcessing.Eq(true, active, bands.bands.size)
+        bands.bands.forEachIndexed { i, band ->
+            eq.setBand(i, DynamicsProcessing.EqBand(true, band.cutoffHz.toFloat(), band.gainDb.toFloat()))
+        }
+        config.setPreEqAllChannelsTo(eq)
+        config.setInputGainAllChannelsTo(if (active) bands.preampDb.toFloat() else 0f)
         return DynamicsProcessing(PRIORITY, session, config).apply { setEnabled(true) }
     }
 

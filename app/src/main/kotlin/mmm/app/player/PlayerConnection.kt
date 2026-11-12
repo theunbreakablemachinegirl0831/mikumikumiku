@@ -15,7 +15,6 @@ import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -64,20 +63,13 @@ class PlayerConnection(private val app: MmmApplication, private val scope: Corou
         }
     }
 
-    init {
-        scope.launch(Dispatchers.Main) {
-            // Position is not an event; it is polled.
-            while (true) {
-                controller?.let { c ->
-                    val position = c.currentPosition.coerceAtLeast(0)
-                    if (position != _state.value.positionMs) {
-                        _state.value = _state.value.copy(positionMs = position, durationMs = c.duration.coerceAtLeast(0))
-                    }
-                }
-                delay(500)
-            }
-        }
-    }
+    /**
+     * Where playback is now, read from the player itself. Screens that show the position ask for
+     * it on their own clock while they are on screen (see `rememberPlaybackPosition`); it is not
+     * pushed through [state], so a moving position redraws only the bars and times that show it,
+     * never every screen that reads the state.
+     */
+    fun positionNow(): Long = controller?.currentPosition?.coerceAtLeast(0) ?: _state.value.positionMs
 
     /** Connects to the playback service; a failure is shown rather than swallowed. */
     fun connect() {
@@ -168,6 +160,9 @@ class PlayerConnection(private val app: MmmApplication, private val scope: Corou
             queue = (0 until player.mediaItemCount).map { player.getMediaItemAt(it).mediaMetadata.title?.toString() ?: "제목 없음" },
             queueIndex = player.currentMediaItemIndex,
             durationMs = player.duration.coerceAtLeast(0),
+            // Kept current on every event - a seek, a new track, pause - so anything that reads it
+            // between ticks starts from the right place.
+            positionMs = player.currentPosition.coerceAtLeast(0),
         )
         if (trackId != artworkFor) loadArtwork(trackId)
     }

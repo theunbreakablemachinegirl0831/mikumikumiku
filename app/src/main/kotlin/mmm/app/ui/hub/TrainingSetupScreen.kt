@@ -185,7 +185,7 @@ private fun FilterCard(settings: TrainerSettings, app: MmmApplication) {
 
             val gain = settings.filterGainDb
             SwitchRow(
-                label = if (gain == null) "게인: 레벨 기본값" else "게인: ±${plain(gain)} dB",
+                label = if (gain == null) "게인: 레벨 기본값" else "게인: ±${plain(gain)}\u00A0dB",
                 checked = gain != null,
                 onChange = { on -> app.settings.setFilterGain(if (on) TrainerSettings.DEFAULT_GAIN_DB else null) },
             )

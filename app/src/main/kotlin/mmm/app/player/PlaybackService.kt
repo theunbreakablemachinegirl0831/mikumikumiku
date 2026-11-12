@@ -57,6 +57,14 @@ class PlaybackService : MediaSessionService() {
 
     override fun onCreate() {
         super.onCreate()
+        // The chain gets its settings before the player exists, so the first buffer it plays is
+        // already processed at the right level. Collecting them below happens a moment later, on
+        // the main thread's next turn - long enough for playback to have started unprocessed and
+        // then drop by the preamp's few decibels, which is heard as the start of a song surging.
+        val app = application as MmmApplication
+        eq.setProfile(app.activeCorrection.value)
+        eq.setHarmonics(app.eq.harmonics.value)
+        eq.setNos(app.eq.nos.value)
         val renderers = object : DefaultRenderersFactory(this) {
             override fun buildAudioSink(
                 context: Context,
@@ -93,9 +101,9 @@ class PlaybackService : MediaSessionService() {
             .setCallback(ResolvingCallback())
             .build()
 
-        val app = application as MmmApplication
         scope.launch { app.activeCorrection.collect { eq.setProfile(it) } }
-        scope.launch { app.eq.tube.collect { eq.setTube(it) } }
+        scope.launch { app.eq.harmonics.collect { eq.setHarmonics(it) } }
+        scope.launch { app.eq.nos.collect { eq.setNos(it) } }
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = session

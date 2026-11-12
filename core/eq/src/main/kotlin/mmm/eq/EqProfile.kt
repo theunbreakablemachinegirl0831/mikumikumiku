@@ -105,9 +105,12 @@ public data class EqProfile(
 /**
  * Plays an [EqProfile]: the preamp, then the filters in series, rebuilt for the stream's rate.
  *
- * [update] swaps in another profile while playing. When the new profile has the same number of
- * filters - a band being dragged, a gain being turned - the coefficients change in place and the
- * filters keep their state, so the change is heard as a change and not as a click.
+ * It starts at its profile's gain - never at unity first - so the first block it plays is
+ * already at the level it will keep. [update] swaps in another profile while playing: the
+ * preamp glides to its new value over [GAIN_RAMP_SECONDS] instead of stepping, and when the new
+ * profile has the same number of filters - a band being dragged, a gain being turned - the
+ * coefficients change in place and the filters keep their state, so the change is heard as a
+ * change and not as a click.
  */
 public class EqProcessor internal constructor(profile: EqProfile) : AudioProcessor {
 
@@ -115,10 +118,19 @@ public class EqProcessor internal constructor(profile: EqProfile) : AudioProcess
     private var format: AudioFormat? = null
     private var cascade: BiquadCascade? = null
     private var gain = gainOf(profile)
+    private var targetGain = gain
+    private var gainStep = 0f
+    private var rampFrames = 1
+
+    /** The filters' layout: whether [update] with a profile of this shape can keep their state. */
+    public val filterCount: Int get() = profile.filters.size
 
     override fun prepare(format: AudioFormat) {
         this.format = format
         cascade = build(format)
+        rampFrames = (GAIN_RAMP_SECONDS * format.sampleRate).toInt().coerceAtLeast(1)
+        gain = targetGain
+        gainStep = 0f
     }
 
     /** Call from the thread that calls [process]. */
@@ -127,8 +139,12 @@ public class EqProcessor internal constructor(profile: EqProfile) : AudioProcess
         val current = cascade
         val sameShape = profile.filters.size == this.profile.filters.size
         this.profile = profile
-        gain = gainOf(profile)
-        if (format == null) return
+        targetGain = gainOf(profile)
+        gainStep = (targetGain - gain) / rampFrames
+        if (format == null) {
+            gain = targetGain
+            return
+        }
         if (current != null && sameShape) {
             profile.filters.forEachIndexed { index, filter ->
                 current.setCoefficients(index, filter.coefficients(format.sampleRate))
@@ -139,7 +155,20 @@ public class EqProcessor internal constructor(profile: EqProfile) : AudioProcess
     }
 
     override fun process(buffer: AudioBuffer) {
-        if (gain != 1f) {
+        if (gain != targetGain) {
+            val start = gain
+            var end = start
+            for (ch in 0 until buffer.channels) {
+                val samples = buffer.data[ch]
+                var g = start
+                for (i in 0 until buffer.frames) {
+                    if (g != targetGain) g = if (gainStep > 0) minOf(targetGain, g + gainStep) else maxOf(targetGain, g + gainStep)
+                    samples[i] *= g
+                }
+                end = g
+            }
+            gain = end
+        } else if (gain != 1f) {
             for (ch in 0 until buffer.channels) {
                 val samples = buffer.data[ch]
                 for (i in 0 until buffer.frames) samples[i] *= gain
@@ -162,4 +191,8 @@ public class EqProcessor internal constructor(profile: EqProfile) : AudioProcess
     }
 
     private fun gainOf(profile: EqProfile): Float = 10.0.pow(profile.preampDb / 20.0).toFloat()
+
+    public companion object {
+        public const val GAIN_RAMP_SECONDS: Double = 0.02
+    }
 }

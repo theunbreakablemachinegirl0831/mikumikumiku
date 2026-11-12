@@ -4,18 +4,30 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.drag
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.height
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.input.pointer.pointerInput
@@ -28,7 +40,9 @@ import androidx.compose.ui.unit.sp
 import mmm.app.data.PeqBand
 import mmm.app.ui.theme.GlassTheme
 import mmm.app.ui.visual.SpectrumState
-import mmm.app.ui.visual.drawSpectrum
+import mmm.app.ui.visual.SpectrumLayers
+import mmm.app.ui.visual.SpectrumPaint
+import mmm.app.ui.visual.drawSpectrumLayers
 import mmm.eq.EqFilter
 import mmm.eq.EqProfile
 import mmm.eq.FrequencyResponse
@@ -53,7 +67,8 @@ fun EqGraph(
     spectrum: SpectrumState?,
     modifier: Modifier = Modifier,
     layer: List<EqFilter>? = null,
-    spectrumColor: Color = Color.Unspecified,
+    spectrumPaint: SpectrumPaint? = null,
+    spectrumLayers: SpectrumLayers = SpectrumLayers(weighted = false, showRaw = false, showWeighted = true),
     active: Boolean = true,
     nodes: List<PeqBand> = emptyList(),
     selectedNode: Int = -1,
@@ -71,15 +86,22 @@ fun EqGraph(
     val select by rememberUpdatedState(onSelectNode)
     val move by rememberUpdatedState(onMoveNode)
     val labelStyle = TextStyle(color = colors.inkMuted, fontSize = 11.sp)
+    // The gutters are as wide and tall as the labels really are in this font and size, so no
+    // label is ever cut at the edge, whatever the listener's font scale.
+    val gutter = remember(measurer, labelStyle) {
+        val widest = listOf("+12", "-12").maxOf { measurer.measure(it, labelStyle).size.width }
+        Gutter(left = widest.toFloat(), bottom = measurer.measure("10k", labelStyle).size.height.toFloat())
+    }
 
+    Column(modifier) {
     Canvas(
-        modifier
+        Modifier
             .fillMaxWidth()
             .height(230.dp)
-            .pointerInput(Unit) {
+            .pointerInput(gutter) {
                 awaitEachGesture {
                     val down = awaitFirstDown()
-                    val plot = plotOf(Size(size.width.toFloat(), size.height.toFloat()), density)
+                    val plot = plotOf(Size(size.width.toFloat(), size.height.toFloat()), density, gutter)
                     val reach = HANDLE_REACH_DP * density
                     // The nearest handle within reach is taken; a touch elsewhere is left for scrolling.
                     val index = currentNodes.indices
@@ -96,7 +118,7 @@ fun EqGraph(
                 }
             },
     ) {
-        val plot = plotOf(size, density)
+        val plot = plotOf(size, density, gutter)
 
         for (db in listOf(12.0, 6.0, 0.0, -6.0, -12.0)) {
             val y = yOf(db, plot)
@@ -118,13 +140,13 @@ fun EqGraph(
 
         clipRect(plot.left, plot.top, plot.right, plot.bottom) {
             if (spectrum != null) {
-                spectrum.frame // read so the spectrum redraws every frame
                 // A chosen colour is drawn stronger than the default ink: it is there to be seen.
-                val chosen = spectrumColor != Color.Unspecified
-                drawSpectrum(
-                    spectrum.levels,
+                val chosen = spectrumPaint != null
+                drawSpectrumLayers(
+                    spectrum,
+                    spectrumLayers,
                     plot,
-                    color = if (chosen) spectrumColor else ink,
+                    paint = spectrumPaint ?: SpectrumPaint(ink),
                     fillAlpha = if (chosen) 0.30f else 0.20f,
                     lineAlpha = if (chosen) 0.70f else 0.35f,
                     gain = 0.92f,
@@ -160,7 +182,45 @@ fun EqGraph(
             drawText(text, topLeft = centre - Offset(text.size.width / 2f, text.size.height / 2f))
         }
     }
+    if (spectrum != null) Legend(spectrumPaint?.start ?: ink, layered = layer != null, raw = spectrumLayers.weighted && spectrumLayers.showRaw)
+    }
 }
+
+/** What each mark on the graph is: the EQ's own curve, the music's spectrum, and so on. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun Legend(spectrumColor: Color, layered: Boolean, raw: Boolean) {
+    val ink = GlassTheme.colors.ink
+    FlowRow(
+        Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 2.dp),
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        LegendItem("EQ 곡선") { drawLine(ink, Offset(0f, size.height / 2), Offset(size.width, size.height / 2), 2.5f * density) }
+        if (layered) LegendItem("이 탭의 단계") { drawLine(ink.copy(alpha = 0.3f), Offset(0f, size.height / 2), Offset(size.width, size.height / 2), 1.5f * density) }
+        LegendItem("재생 중 스펙트럼") { drawRect(spectrumColor.copy(alpha = 0.35f)) }
+        if (raw) {
+            LegendItem("가중 전 스펙트럼") {
+                drawLine(
+                    spectrumColor,
+                    Offset(0f, size.height / 2),
+                    Offset(size.width, size.height / 2),
+                    1.2f * density,
+                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(4f * density, 3f * density)),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun LegendItem(label: String, mark: DrawScope.() -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Canvas(Modifier.size(width = 16.dp, height = 8.dp), onDraw = mark)
+        Text(label, style = MaterialTheme.typography.labelSmall, color = GlassTheme.colors.inkMuted, maxLines = 1)
+    }
+}
+
+private class Gutter(val left: Float, val bottom: Float)
 
 private val GRID: List<Double> = FrequencyResponse.logGrid(20.0, 20000.0, 24)
 private val GRID_LINES = listOf(30.0, 50.0, 100.0, 200.0, 500.0, 1000.0, 2000.0, 5000.0, 10000.0)
@@ -173,9 +233,9 @@ private const val HIGH_HZ = 20000.0
 private const val RANGE_DB = 15.0
 private const val HANDLE_REACH_DP = 30f
 
-/** The area the curve is drawn in: the canvas less a gutter on the left for dB and below for Hz. */
-private fun plotOf(size: Size, density: Float): Rect =
-    Rect(38f * density, 8f * density, size.width - 12f * density, size.height - 24f * density)
+/** The area the curve is drawn in: the canvas less a gutter on the left for dB and below for Hz, each sized to its labels. */
+private fun plotOf(size: Size, density: Float, gutter: Gutter): Rect =
+    Rect(gutter.left + 10f * density, 10f * density, size.width - 14f * density, size.height - gutter.bottom - 8f * density)
 
 private fun xOf(frequency: Double, plot: Rect): Float =
     plot.left + (ln(frequency.coerceIn(LOW_HZ, HIGH_HZ) / LOW_HZ) / ln(HIGH_HZ / LOW_HZ)).toFloat() * plot.width

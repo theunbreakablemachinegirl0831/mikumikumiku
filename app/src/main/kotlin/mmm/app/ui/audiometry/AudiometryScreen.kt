@@ -2,6 +2,10 @@ package mmm.app.ui.audiometry
 
 import android.content.Context
 import android.media.AudioManager
+import android.os.SystemClock
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -22,6 +26,9 @@ import mmm.app.ui.components.glass.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
+import kotlinx.coroutines.delay
+import mmm.app.ui.components.glass.GlassProgressBar
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -44,6 +51,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import mmm.app.MmmApplication
+import mmm.app.audiometry.AudiometryPhase
 import mmm.app.audiometry.AudiometryProgress
 import mmm.app.audiometry.AudiometryRunner
 import mmm.app.ui.components.glass.GlassTopBar
@@ -51,6 +59,7 @@ import mmm.eq.EarphoneCalibration
 import mmm.training.audiometry.AudiogramCalibration
 import mmm.training.audiometry.AudiogramResult
 import mmm.training.audiometry.AudiometryProtocol
+import mmm.training.audiometry.CountingProtocol
 import mmm.training.audiometry.Ear
 import java.text.DateFormat
 import java.util.Date
@@ -101,8 +110,8 @@ class AudiometryViewModel(private val app: MmmApplication) : ViewModel() {
         }
     }
 
-    fun press() {
-        runner?.press()
+    fun answer(count: Int) {
+        runner?.answer(count)
     }
 
     fun stop() {
@@ -154,7 +163,7 @@ fun AudiometryScreen(app: MmmApplication, onBack: (() -> Unit)?) {
             GlassTopBar(title = "청력 검사", onBack = onBack?.let { back -> { vm.stop(); back() } })
 
             if (ui.running) {
-                RunningContent(ui.progress, onPress = vm::press, onStop = vm::stop)
+                RunningContent(ui.progress, onAnswer = vm::answer, onStop = vm::stop)
                 return@Column
             }
 
@@ -162,8 +171,9 @@ fun AudiometryScreen(app: MmmApplication, onBack: (() -> Unit)?) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text("준비", style = MaterialTheme.typography.titleMedium)
                     Text(
-                        "조용한 곳에서 이어폰을 깊게 꽂는다. 한쪽 귀씩 '삐-삐-삐' 소리가 작게 났다 커졌다 한다. " +
-                            "아무리 작아도 들렸다고 느끼면 바로 큰 버튼을 누른다. 양쪽 귀 9개 주파수, 10분 남짓 걸린다.",
+                        "조용한 곳에서 이어폰을 깊게 꽂는다. 한쪽 귀씩, 5초 동안 '삐-' 소리가 1~5번 무작위로 울린다. " +
+                            "끝나면 몇 번 들렸는지 고른다 - 하나도 안 들렸으면 0. 소리는 점점 작아지다가 다시 커진다. " +
+                            "정확히 센 경우만 '들림'으로 치니, 헷갈리면 들린 만큼만 고른다. 양쪽 귀 9개 주파수, 15~20분 걸린다.",
                         style = MaterialTheme.typography.bodyMedium,
                     )
                     Text(
@@ -203,20 +213,57 @@ fun AudiometryScreen(app: MmmApplication, onBack: (() -> Unit)?) {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun RunningContent(progress: AudiometryProgress?, onPress: () -> Unit, onStop: () -> Unit) {
+private fun RunningContent(progress: AudiometryProgress?, onAnswer: (Int) -> Unit, onStop: () -> Unit) {
     Text(
-        progress?.let { "${it.ear.label} 귀 · ${hz(it.frequencyHz)} (${it.step}/${it.steps})" } ?: "준비 중",
+        progress?.let { "${it.ear.label} 귀 · ${hz(it.frequencyHz)}Hz (${it.step}/${it.steps}) · ${it.trial}번째" } ?: "준비 중",
         style = MaterialTheme.typography.titleMedium,
     )
-    Text(
-        "소리는 화면에 표시되지 않는다. 귀로만 판단해서, 들릴 때마다 누른다.",
-        style = MaterialTheme.typography.bodySmall,
-    )
-    Button(
-        onClick = onPress,
-        modifier = Modifier.fillMaxWidth().height(220.dp),
-    ) { Text("들렸다!", fontSize = 32.sp) }
+    val listening = progress?.phase != AudiometryPhase.ANSWERING
+    Card {
+        Column(Modifier.padding(18.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            AnimatedContent(targetState = listening, label = "phase") { now ->
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        if (now) "듣는 중 - 몇 번 울리는지 센다" else "몇 번 들렸나요?",
+                        style = MaterialTheme.typography.titleLarge,
+                    )
+                    Text(
+                        if (now) "5초 동안 1~5번 울린다. 화면에는 표시되지 않는다." else "하나도 안 들렸으면 0을 고른다.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+            val since = progress?.listeningSince ?: 0L
+            val elapsed by produceState(0f, since, listening) {
+                if (!listening) {
+                    value = 1f
+                    return@produceState
+                }
+                while (true) {
+                    value = ((SystemClock.elapsedRealtime() - since).toFloat() / CountingProtocol.WINDOW_MS).coerceIn(0f, 1f)
+                    if (value >= 1f) break
+                    delay(50)
+                }
+            }
+            GlassProgressBar(progress = { elapsed }, modifier = Modifier.fillMaxWidth().height(4.dp))
+        }
+    }
+    FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+        maxItemsInEachRow = 3,
+    ) {
+        CountingProtocol.ANSWERS.forEach { count ->
+            Button(
+                onClick = { onAnswer(count) },
+                enabled = !listening,
+                modifier = Modifier.weight(1f).height(84.dp),
+            ) { Text(count.toString(), fontSize = 30.sp) }
+        }
+    }
     TextButton(onClick = onStop) { Text("검사 중단") }
 }
 
@@ -250,9 +297,9 @@ private fun ResultContent(result: AudiogramResult, levels: Map<Pair<Ear, Double>
             Text(
                 buildString {
                     append(if (result.reliable) "응답 신뢰도: 양호" else "응답 신뢰도: 낮음 - 다시 검사하는 것이 좋다")
-                    append(" · 무음 구간에서 누름 ${result.falseAlarms}회 (무음 제시 ${result.catchTrials}회)")
+                    append(" · 실제보다 많이 센 경우 ${result.falseAlarms}회 (전체 ${result.catchTrials}회)")
                     result.retestDifferenceDb.forEach { (ear, db) ->
-                        append(" · ${ear.label} 1 kHz 재검 차이 ${db.toInt()} dB")
+                        append(" · ${ear.label} 1 kHz 재검 차이 ${db.toInt()}\u00A0dB")
                     }
                 },
                 style = MaterialTheme.typography.bodySmall,
